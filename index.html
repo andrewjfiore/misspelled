@@ -36,6 +36,7 @@
       X, Plus, Shuffle, AlertCircle, Sparkles
     } from 'lucide-react';
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -214,7 +215,11 @@ function generatePhonetic(word) {
     ["er", "re"],
     ["re", "er"],
     ["tion", "sion"],
-    ["sion", "tion"]
+    ["sion", "tion"],
+    // Greek-letter glyph/spelling confusions (e.g. Sony Alpha listings written as α / a / cx)
+    ["alpha", "cx"],
+    ["cx", "alpha"],
+    ["alpha", "a"]
   ];
   const lower = word.toLowerCase();
   for (const [from, to] of subs) {
@@ -269,6 +274,158 @@ function generateCase(word) {
   if (word.toUpperCase() !== word) out.add(word.toUpperCase());
   const cap = word.replace(/\b\w/g, (c) => c.toUpperCase());
   if (cap !== word) out.add(cap);
+  return [...out];
+}
+function generateVowelEpenthesis(word) {
+  const out = /* @__PURE__ */ new Set();
+  const isCon = (c) => /^[bcdfghjklmnpqrstvwxz]$/i.test(c);
+  const vowels = ["a", "e", "i", "o", "u"];
+  for (let i = 0; i < word.length - 1; i++) {
+    if (isCon(word[i]) && isCon(word[i + 1])) {
+      for (const v of vowels) {
+        out.add(word.slice(0, i + 1) + v + word.slice(i + 1));
+      }
+    }
+  }
+  return [...out];
+}
+function generateCollapseDoubles(word) {
+  const out = /* @__PURE__ */ new Set();
+  for (let i = 0; i < word.length - 1; i++) {
+    if (word[i].toLowerCase() === word[i + 1].toLowerCase() && /[a-z]/i.test(word[i])) {
+      out.add(word.slice(0, i) + word.slice(i + 1));
+    }
+  }
+  return [...out];
+}
+function generateVowelSwap(word) {
+  const out = /* @__PURE__ */ new Set();
+  const vowels = ["a", "e", "i", "o", "u"];
+  for (let i = 0; i < word.length; i++) {
+    const ch = word[i].toLowerCase();
+    if (vowels.includes(ch)) {
+      for (const v of vowels) {
+        if (v !== ch) out.add(word.slice(0, i) + v + word.slice(i + 1));
+      }
+    }
+  }
+  return [...out];
+}
+function generateHardCK(word) {
+  const out = /* @__PURE__ */ new Set();
+  const lower = word.toLowerCase();
+  if (lower[0] === "c") out.add("k" + word.slice(1));
+  if (lower[0] === "k") out.add("c" + word.slice(1));
+  if (lower.endsWith("ck")) out.add(word.slice(0, -2) + "c");
+  else if (lower.endsWith("c")) out.add(word.slice(0, -1) + "ck");
+  else if (lower.endsWith("k")) out.add(word.slice(0, -1) + "ck");
+  out.delete(word);
+  return [...out];
+}
+const REGIONAL_PAIRS = [
+  ["color", "colour"],
+  ["flavor", "flavour"],
+  ["honor", "honour"],
+  ["neighbor", "neighbour"],
+  ["humor", "humour"],
+  ["labor", "labour"],
+  ["behavior", "behaviour"],
+  ["favor", "favour"],
+  ["armor", "armour"],
+  ["center", "centre"],
+  ["theater", "theatre"],
+  ["fiber", "fibre"],
+  ["liter", "litre"],
+  ["meter", "metre"],
+  ["jewelry", "jewellery"],
+  ["catalog", "catalogue"],
+  ["analog", "analogue"],
+  ["dialog", "dialogue"],
+  ["epilog", "epilogue"],
+  ["defense", "defence"],
+  ["offense", "offence"],
+  ["license", "licence"],
+  ["practice", "practise"],
+  ["pretense", "pretence"],
+  ["organize", "organise"],
+  ["realize", "realise"],
+  ["recognize", "recognise"],
+  ["analyze", "analyse"],
+  ["paralyze", "paralyse"],
+  ["gray", "grey"],
+  ["mold", "mould"],
+  ["plow", "plough"],
+  ["donut", "doughnut"],
+  ["tire", "tyre"],
+  ["curb", "kerb"],
+  ["aluminum", "aluminium"],
+  ["program", "programme"],
+  ["pajamas", "pyjamas"],
+  ["canceled", "cancelled"],
+  ["traveled", "travelled"],
+  ["modeled", "modelled"]
+];
+function generateRegional(word) {
+  const out = /* @__PURE__ */ new Set();
+  const lower = word.toLowerCase();
+  for (const [a, b] of REGIONAL_PAIRS) {
+    let idx = 0;
+    while ((idx = lower.indexOf(a, idx)) !== -1) {
+      out.add(word.slice(0, idx) + b + word.slice(idx + a.length));
+      idx++;
+    }
+    idx = 0;
+    while ((idx = lower.indexOf(b, idx)) !== -1) {
+      out.add(word.slice(0, idx) + a + word.slice(idx + b.length));
+      idx++;
+    }
+  }
+  out.delete(word);
+  return [...out];
+}
+function generateHyphenation(word) {
+  const out = /* @__PURE__ */ new Set();
+  if (word.includes("-")) {
+    out.add(word.replace(/-/g, ""));
+    out.add(word.replace(/-/g, " "));
+  } else if (!word.includes(" ")) {
+    for (let i = 1; i <= word.length - 2; i++) {
+      out.add(word.slice(0, i) + "-" + word.slice(i));
+    }
+  }
+  return [...out];
+}
+function generatePlural(word) {
+  const out = /* @__PURE__ */ new Set();
+  if (word.length < 3) return [];
+  if (word.toLowerCase().endsWith("s")) {
+    out.add(word.slice(0, -1));
+  } else if (/[a-z0-9]$/i.test(word)) {
+    out.add(word + "s");
+  }
+  return [...out];
+}
+function generateOcrLookalikes(word) {
+  const out = /* @__PURE__ */ new Set();
+  const subs = [
+    ["rn", "m"],
+    ["m", "rn"],
+    ["cl", "d"],
+    ["d", "cl"],
+    ["vv", "w"],
+    ["w", "vv"],
+    ["nn", "m"],
+    ["ii", "n"]
+  ];
+  const lower = word.toLowerCase();
+  for (const [from, to] of subs) {
+    let idx = 0;
+    while ((idx = lower.indexOf(from, idx)) !== -1) {
+      out.add(word.slice(0, idx) + to + word.slice(idx + from.length));
+      idx++;
+    }
+  }
+  out.delete(word);
   return [...out];
 }
 const EBAY_REGIONS = [
@@ -342,7 +499,15 @@ const TYPO_TYPES = [
   { key: "doubled", label: "Doubled letter", symbol: "XX", desc: "A letter typed twice (cod -> ccod)", defaultOn: true, color: "olive" },
   { key: "replaced", label: "Neighbor key", symbol: "~", desc: "Adjacent key hit instead (cod -> xod)", defaultOn: true, color: "teal" },
   { key: "inserted", label: "Extra neighbor", symbol: "+", desc: "Adjacent key added (cod -> xcod)", defaultOn: false, color: "ink" },
-  { key: "phonetic", label: "Phonetic", symbol: "\u03A6", desc: "Sound-alike (c/k, ph/f, ie/ei)", defaultOn: false, color: "rust" },
+  { key: "phonetic", label: "Phonetic", symbol: "\u03A6", desc: "Sound-alike (c/k, ph/f, alpha/cx)", defaultOn: false, color: "rust" },
+  { key: "vowel_epen", label: "Vowel epenthesis", symbol: "V+", desc: "Vowel inserted between consonants (tamron -> tamaron)", defaultOn: true, color: "rust" },
+  { key: "collapse_doubles", label: "Collapse doubles", symbol: "Xx", desc: "Double letter to single (philippe -> philipe)", defaultOn: true, color: "amber" },
+  { key: "vowel_swap", label: "Vowel swap", symbol: "aei", desc: "Vowel replaced with another (mamiya -> memiya)", defaultOn: false, color: "olive" },
+  { key: "hard_ck", label: "Hard C/K", symbol: "c/k", desc: "Word-start c/k swap, end c/ck (canon -> kanon)", defaultOn: false, color: "teal" },
+  { key: "regional", label: "UK/US spelling", symbol: "UK", desc: "British/American variants (aluminum/aluminium)", defaultOn: true, color: "rust" },
+  { key: "hyphenation", label: "Hyphenation", symbol: "-/", desc: "Hyphens added/removed (iphone -> i-phone)", defaultOn: false, color: "olive" },
+  { key: "plural", label: "Plural +/-s", symbol: "+s", desc: "Trailing s added or removed (photo -> photos)", defaultOn: false, color: "teal" },
+  { key: "ocr", label: "Visual lookalikes", symbol: "rn", desc: "Handwriting/OCR (rn/m, cl/d, vv/w)", defaultOn: false, color: "ink" },
   { key: "numletter", label: "Number/letter", symbol: "01", desc: "0/o, 1/l, 5/s confusions", defaultOn: false, color: "amber" },
   { key: "spacing", label: "Spacing", symbol: "_", desc: "Space added or removed", defaultOn: false, color: "olive" },
   { key: "case", label: "Case", symbol: "Aa", desc: "Different capitalization", defaultOn: false, color: "teal" }
@@ -423,6 +588,14 @@ function MisspelledApp() {
       if (modes.replaced) add(generateReplaced(token, neighbors), "replaced");
       if (modes.inserted) add(generateInserted(token, neighbors), "inserted");
       if (modes.phonetic) add(generatePhonetic(token), "phonetic");
+      if (modes.vowel_epen) add(generateVowelEpenthesis(token), "vowel_epen");
+      if (modes.collapse_doubles) add(generateCollapseDoubles(token), "collapse_doubles");
+      if (modes.vowel_swap) add(generateVowelSwap(token), "vowel_swap");
+      if (modes.hard_ck) add(generateHardCK(token), "hard_ck");
+      if (modes.regional) add(generateRegional(token), "regional");
+      if (modes.hyphenation) add(generateHyphenation(token), "hyphenation");
+      if (modes.plural) add(generatePlural(token), "plural");
+      if (modes.ocr) add(generateOcrLookalikes(token), "ocr");
       if (modes.numletter) add(generateNumLetter(token), "numletter");
       if (modes.spacing) add(generateSpacing(token), "spacing");
       if (modes.case) add(generateCase(token), "case");
@@ -1362,6 +1535,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
     createRoot(document.getElementById('root')).render(React.createElement(MisspelledApp));
   </script>

@@ -110,6 +110,8 @@ function generatePhonetic(word) {
     ['s','z'],['z','s'],['ck','k'],['k','ck'],
     ['ou','u'],['u','ou'],['er','re'],['re','er'],
     ['tion','sion'],['sion','tion'],
+    // Greek-letter glyph/spelling confusions (e.g. Sony Alpha listings written as α / a / cx)
+    ['alpha','cx'],['cx','alpha'],['alpha','a'],
   ];
   const lower = word.toLowerCase();
   for (const [from, to] of subs) {
@@ -163,6 +165,155 @@ function generateCase(word) {
   // Capitalize first letter of each word
   const cap = word.replace(/\b\w/g, c => c.toUpperCase());
   if (cap !== word) out.add(cap);
+  return [...out];
+}
+
+// Vowel epenthesis: insert a/e/i/o/u between adjacent consonants.
+// Catches the dominant misspelling mode for foreign brand names:
+// tamron -> tamaron, mclaren -> mcalaren, schwarzkopf -> schawarzkopf.
+function generateVowelEpenthesis(word) {
+  const out = new Set();
+  const isCon = (c) => /^[bcdfghjklmnpqrstvwxz]$/i.test(c);
+  const vowels = ['a','e','i','o','u'];
+  for (let i = 0; i < word.length - 1; i++) {
+    if (isCon(word[i]) && isCon(word[i + 1])) {
+      for (const v of vowels) {
+        out.add(word.slice(0, i + 1) + v + word.slice(i + 1));
+      }
+    }
+  }
+  return [...out];
+}
+
+// Collapse doubles: for each double-letter pair, output the single-letter version.
+// The inverse of generateDoubled. Catches philippe -> philipe, cannon -> canon.
+function generateCollapseDoubles(word) {
+  const out = new Set();
+  for (let i = 0; i < word.length - 1; i++) {
+    if (word[i].toLowerCase() === word[i + 1].toLowerCase() && /[a-z]/i.test(word[i])) {
+      out.add(word.slice(0, i) + word.slice(i + 1));
+    }
+  }
+  return [...out];
+}
+
+// Vowel swap: replace each vowel with every other vowel.
+// More aggressive than the y/i pair in phonetic. Catches a/e/o foreign-name confusions.
+function generateVowelSwap(word) {
+  const out = new Set();
+  const vowels = ['a','e','i','o','u'];
+  for (let i = 0; i < word.length; i++) {
+    const ch = word[i].toLowerCase();
+    if (vowels.includes(ch)) {
+      for (const v of vowels) {
+        if (v !== ch) out.add(word.slice(0, i) + v + word.slice(i + 1));
+      }
+    }
+  }
+  return [...out];
+}
+
+// Hard-C / K positional swap. Cleaner than the global c<->k in phonetic.
+// Word-start: canon <-> kanon, konica <-> conica.
+// Word-end: panic -> panick, kodak -> kodack / kodac.
+function generateHardCK(word) {
+  const out = new Set();
+  const lower = word.toLowerCase();
+  if (lower[0] === 'c') out.add('k' + word.slice(1));
+  if (lower[0] === 'k') out.add('c' + word.slice(1));
+  if (lower.endsWith('ck')) out.add(word.slice(0, -2) + 'c');
+  else if (lower.endsWith('c')) out.add(word.slice(0, -1) + 'ck');
+  else if (lower.endsWith('k')) out.add(word.slice(0, -1) + 'ck');
+  out.delete(word);
+  return [...out];
+}
+
+// British vs American spelling pairs. Crucial for cross-region eBay arbitrage
+// (UK sellers listing "aluminium" never surface in US "aluminum" searches).
+const REGIONAL_PAIRS = [
+  ['color','colour'],['flavor','flavour'],['honor','honour'],
+  ['neighbor','neighbour'],['humor','humour'],['labor','labour'],
+  ['behavior','behaviour'],['favor','favour'],['armor','armour'],
+  ['center','centre'],['theater','theatre'],['fiber','fibre'],
+  ['liter','litre'],['meter','metre'],
+  ['jewelry','jewellery'],['catalog','catalogue'],['analog','analogue'],
+  ['dialog','dialogue'],['epilog','epilogue'],
+  ['defense','defence'],['offense','offence'],['license','licence'],
+  ['practice','practise'],['pretense','pretence'],
+  ['organize','organise'],['realize','realise'],['recognize','recognise'],
+  ['analyze','analyse'],['paralyze','paralyse'],
+  ['gray','grey'],['mold','mould'],['plow','plough'],['donut','doughnut'],
+  ['tire','tyre'],['curb','kerb'],['aluminum','aluminium'],
+  ['program','programme'],['pajamas','pyjamas'],
+  ['canceled','cancelled'],['traveled','travelled'],['modeled','modelled'],
+];
+function generateRegional(word) {
+  const out = new Set();
+  const lower = word.toLowerCase();
+  for (const [a, b] of REGIONAL_PAIRS) {
+    let idx = 0;
+    while ((idx = lower.indexOf(a, idx)) !== -1) {
+      out.add(word.slice(0, idx) + b + word.slice(idx + a.length));
+      idx++;
+    }
+    idx = 0;
+    while ((idx = lower.indexOf(b, idx)) !== -1) {
+      out.add(word.slice(0, idx) + a + word.slice(idx + b.length));
+      idx++;
+    }
+  }
+  out.delete(word);
+  return [...out];
+}
+
+// Hyphenation: insert or strip hyphens in compound names.
+// iphone -> i-phone / i phone, playstation -> play-station.
+function generateHyphenation(word) {
+  const out = new Set();
+  if (word.includes('-')) {
+    out.add(word.replace(/-/g, ''));
+    out.add(word.replace(/-/g, ' '));
+  } else if (!word.includes(' ')) {
+    // Only insert if both sides would be >=2 chars (avoids "i-phone"-style noise we DO want
+    // for short brand prefixes, so keep i=1 too -- but stop at length-2 to avoid trailing -s)
+    for (let i = 1; i <= word.length - 2; i++) {
+      out.add(word.slice(0, i) + '-' + word.slice(i));
+    }
+  }
+  return [...out];
+}
+
+// Plural / singular: add or strip a trailing s.
+function generatePlural(word) {
+  const out = new Set();
+  if (word.length < 3) return [];
+  if (word.toLowerCase().endsWith('s')) {
+    out.add(word.slice(0, -1));
+  } else if (/[a-z0-9]$/i.test(word)) {
+    out.add(word + 's');
+  }
+  return [...out];
+}
+
+// Visual / OCR lookalikes beyond keyboard adjacency. Catches handwriting-style
+// or image-OCR-fed listings: norman -> norrnan, harmless -> hamless.
+function generateOcrLookalikes(word) {
+  const out = new Set();
+  const subs = [
+    ['rn','m'],['m','rn'],
+    ['cl','d'],['d','cl'],
+    ['vv','w'],['w','vv'],
+    ['nn','m'],['ii','n'],
+  ];
+  const lower = word.toLowerCase();
+  for (const [from, to] of subs) {
+    let idx = 0;
+    while ((idx = lower.indexOf(from, idx)) !== -1) {
+      out.add(word.slice(0, idx) + to + word.slice(idx + from.length));
+      idx++;
+    }
+  }
+  out.delete(word);
   return [...out];
 }
 
@@ -248,7 +399,15 @@ const TYPO_TYPES = [
   { key: 'doubled', label: 'Doubled letter', symbol: 'XX', desc: 'A letter typed twice (cod -> ccod)', defaultOn: true, color: 'olive' },
   { key: 'replaced', label: 'Neighbor key', symbol: '~', desc: 'Adjacent key hit instead (cod -> xod)', defaultOn: true, color: 'teal' },
   { key: 'inserted', label: 'Extra neighbor', symbol: '+', desc: 'Adjacent key added (cod -> xcod)', defaultOn: false, color: 'ink' },
-  { key: 'phonetic', label: 'Phonetic', symbol: 'Φ', desc: 'Sound-alike (c/k, ph/f, ie/ei)', defaultOn: false, color: 'rust' },
+  { key: 'phonetic', label: 'Phonetic', symbol: 'Φ', desc: 'Sound-alike (c/k, ph/f, alpha/cx)', defaultOn: false, color: 'rust' },
+  { key: 'vowel_epen', label: 'Vowel epenthesis', symbol: 'V+', desc: 'Vowel inserted between consonants (tamron -> tamaron)', defaultOn: true, color: 'rust' },
+  { key: 'collapse_doubles', label: 'Collapse doubles', symbol: 'Xx', desc: 'Double letter to single (philippe -> philipe)', defaultOn: true, color: 'amber' },
+  { key: 'vowel_swap', label: 'Vowel swap', symbol: 'aei', desc: 'Vowel replaced with another (mamiya -> memiya)', defaultOn: false, color: 'olive' },
+  { key: 'hard_ck', label: 'Hard C/K', symbol: 'c/k', desc: 'Word-start c/k swap, end c/ck (canon -> kanon)', defaultOn: false, color: 'teal' },
+  { key: 'regional', label: 'UK/US spelling', symbol: 'UK', desc: 'British/American variants (aluminum/aluminium)', defaultOn: true, color: 'rust' },
+  { key: 'hyphenation', label: 'Hyphenation', symbol: '-/', desc: 'Hyphens added/removed (iphone -> i-phone)', defaultOn: false, color: 'olive' },
+  { key: 'plural', label: 'Plural +/-s', symbol: '+s', desc: 'Trailing s added or removed (photo -> photos)', defaultOn: false, color: 'teal' },
+  { key: 'ocr', label: 'Visual lookalikes', symbol: 'rn', desc: 'Handwriting/OCR (rn/m, cl/d, vv/w)', defaultOn: false, color: 'ink' },
   { key: 'numletter', label: 'Number/letter', symbol: '01', desc: '0/o, 1/l, 5/s confusions', defaultOn: false, color: 'amber' },
   { key: 'spacing', label: 'Spacing', symbol: '_', desc: 'Space added or removed', defaultOn: false, color: 'olive' },
   { key: 'case', label: 'Case', symbol: 'Aa', desc: 'Different capitalization', defaultOn: false, color: 'teal' },
@@ -351,6 +510,14 @@ export default function MisspelledApp() {
       if (modes.replaced) add(generateReplaced(token, neighbors), 'replaced');
       if (modes.inserted) add(generateInserted(token, neighbors), 'inserted');
       if (modes.phonetic) add(generatePhonetic(token), 'phonetic');
+      if (modes.vowel_epen) add(generateVowelEpenthesis(token), 'vowel_epen');
+      if (modes.collapse_doubles) add(generateCollapseDoubles(token), 'collapse_doubles');
+      if (modes.vowel_swap) add(generateVowelSwap(token), 'vowel_swap');
+      if (modes.hard_ck) add(generateHardCK(token), 'hard_ck');
+      if (modes.regional) add(generateRegional(token), 'regional');
+      if (modes.hyphenation) add(generateHyphenation(token), 'hyphenation');
+      if (modes.plural) add(generatePlural(token), 'plural');
+      if (modes.ocr) add(generateOcrLookalikes(token), 'ocr');
       if (modes.numletter) add(generateNumLetter(token), 'numletter');
       if (modes.spacing) add(generateSpacing(token), 'spacing');
       if (modes.case) add(generateCase(token), 'case');

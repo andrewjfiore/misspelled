@@ -1,0 +1,19 @@
+{
+  "name": "misspelled",
+  "version": "1.1.0",
+  "description": "A single-file React app for finding misspelled eBay listings.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "python -m http.server 8765"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewjfiore/misspelled.git"
+  },
+  "license": "ISC"
+}
