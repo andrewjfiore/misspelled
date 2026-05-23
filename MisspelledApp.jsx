@@ -377,6 +377,10 @@ const SORT_OPTIONS = [
 function buildEbayUrl(query, options) {
   const params = new URLSearchParams();
   params.set('_nkw', query);
+  // _in_kw=2 = eBay's "Any words, any order" mode. Use this for OR queries because
+  // the (a,b,c) paren-OR syntax silently returns 0 results on long term lists -- eBay
+  // treats the parens and commas as literal characters in the search string.
+  if (options.anyWords) params.set('_in_kw', '2');
   if (options.category && options.category !== 'all') params.set('_sacat', options.category);
   if (options.condition && options.condition !== 'all') params.set('LH_ItemCondition', options.condition);
   if (options.minPrice) params.set('_udlo', options.minPrice);
@@ -685,9 +689,10 @@ export default function MisspelledApp() {
     return combinedMode === 'or' ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
 
-  // OR mode: flatten all variants from all groups into one big (v1,v2,...,vN) OR
-  // group. Match any listing containing ANY one variant. Right default for typo
-  // hunting -- catches listings where the seller misspelled only one word.
+  // OR mode: flatten all variants into a space-separated list and rely on
+  // eBay's _in_kw=2 ("Any words, any order") to OR them. The (a,b,c) paren syntax
+  // silently fails on long term lists -- eBay treats the parens/commas as literal
+  // chars in the search string. _in_kw=2 is the documented advanced-search mode.
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -698,19 +703,34 @@ export default function MisspelledApp() {
     if (all.length === 0) return { queries: [], truncated: false };
 
     const excludeSuffix = buildExcludeSuffix();
-    if (all.length === 1) {
-      return { queries: [quoteVariant(all[0]) + excludeSuffix], truncated: false };
-    }
-    const oneShot = formatGroup(all) + excludeSuffix;
+    const quoted = all.map(quoteVariant);
+    const oneShot = quoted.join(' ') + excludeSuffix;
     if (oneShot.length <= MAX_QUERY_LEN) return { queries: [oneShot], truncated: false };
 
-    let chunks = chunkGroupVariants(all, MAX_QUERY_LEN - excludeSuffix.length);
+    // Chunk space-separated terms (no paren overhead).
+    const budget = MAX_QUERY_LEN - excludeSuffix.length;
+    const chunks = [];
+    let cur = [], curLen = 0;
+    for (const v of quoted) {
+      const addLen = v.length + (cur.length > 0 ? 1 : 0);
+      if (curLen + addLen > budget && cur.length > 0) {
+        chunks.push(cur);
+        cur = [v];
+        curLen = v.length;
+      } else {
+        cur.push(v);
+        curLen += addLen;
+      }
+    }
+    if (cur.length > 0) chunks.push(cur);
+
     let truncated = false;
-    if (chunks.length > MAX_TOTAL_QUERIES) {
-      chunks = chunks.slice(0, MAX_TOTAL_QUERIES);
+    let final = chunks.map(c => c.join(' ') + excludeSuffix);
+    if (final.length > MAX_TOTAL_QUERIES) {
+      final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
     }
-    return { queries: chunks.map(c => c + excludeSuffix), truncated };
+    return { queries: final, truncated };
   };
 
   // AND mode (per-group):
@@ -790,7 +810,10 @@ export default function MisspelledApp() {
 
   const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, combinedMode]);
   const combinedQueries = splitResult.queries;
-  const combinedUrls = useMemo(() => combinedQueries.map(q => buildEbayUrl(q, ebayOpts)), [combinedQueries, ebayOpts]);
+  const combinedUrls = useMemo(
+    () => combinedQueries.map(q => buildEbayUrl(q, { ...ebayOpts, anyWords: combinedMode === 'or' })),
+    [combinedQueries, ebayOpts, combinedMode]
+  );
   const isSplit = combinedQueries.length > 1;
   const isTruncated = splitResult.truncated;
 
@@ -1568,7 +1591,7 @@ export default function MisspelledApp() {
           textAlign: 'center', padding: '24px 16px', fontSize: '11px', color: '#78716c',
         }}>
           <div className="typewriter" style={{ letterSpacing: '0.15em', marginBottom: '4px' }}>
-            EBAY SYNTAX: (a,b,c) = OR group · space between groups = AND · -term = exclude · click a typo card to search that word alone
+            EBAY: OR mode uses _in_kw=2 (any words) · AND mode uses (a,b,c) per group · -term = exclude · click a typo card to search that word alone
           </div>
           <div style={{ fontSize: '10.5px', fontStyle: 'italic' }}>
             Sellers who can't spell don't get top dollar. Happy hunting.
