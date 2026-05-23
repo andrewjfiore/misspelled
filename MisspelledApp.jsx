@@ -451,6 +451,13 @@ export default function MisspelledApp() {
 
   const [copiedTerm, setCopiedTerm] = useState(null);
 
+  // Combined-search mode. 'and' = per-group ORs joined by space (eBay AND across groups):
+  // (mamiya,amiya) (rb67,rb6t)  -- listing must have one variant from EACH group.
+  // 'or' = all variants collapsed into one flat OR group: (mamiya,amiya,rb67,rb6t) --
+  // listing only needs ANY one variant. 'or' is the typo-hunting default: matches
+  // listings where the seller misspelled only one of several words.
+  const [combinedMode, setCombinedMode] = useState('or');
+
   const [ebayOpts, setEbayOpts] = useState({
     region: 'com',
     category: 'all',
@@ -673,17 +680,46 @@ export default function MisspelledApp() {
   };
 
   // Split the combined query into 1+ sub-queries that each fit under MAX_QUERY_LEN.
-  //
-  // Strategy:
+  // Returns { queries, truncated }. Branches on combinedMode.
+  const buildSplitQueries = () => {
+    return combinedMode === 'or' ? buildSplitQueriesOr() : buildSplitQueriesAnd();
+  };
+
+  // OR mode: flatten all variants from all groups into one big (v1,v2,...,vN) OR
+  // group. Match any listing containing ANY one variant. Right default for typo
+  // hunting -- catches listings where the seller misspelled only one word.
+  const buildSplitQueriesOr = () => {
+    const all = [];
+    for (let i = 0; i < tokenGroups.length; i++) {
+      for (const v of variantsForGroup(i)) {
+        if (!all.includes(v)) all.push(v);
+      }
+    }
+    if (all.length === 0) return { queries: [], truncated: false };
+
+    const excludeSuffix = buildExcludeSuffix();
+    if (all.length === 1) {
+      return { queries: [quoteVariant(all[0]) + excludeSuffix], truncated: false };
+    }
+    const oneShot = formatGroup(all) + excludeSuffix;
+    if (oneShot.length <= MAX_QUERY_LEN) return { queries: [oneShot], truncated: false };
+
+    let chunks = chunkGroupVariants(all, MAX_QUERY_LEN - excludeSuffix.length);
+    let truncated = false;
+    if (chunks.length > MAX_TOTAL_QUERIES) {
+      chunks = chunks.slice(0, MAX_TOTAL_QUERIES);
+      truncated = true;
+    }
+    return { queries: chunks.map(c => c + excludeSuffix), truncated };
+  };
+
+  // AND mode (per-group):
   //   1. If the full query fits, return it (single element array).
   //   2. Otherwise, allocate a per-group budget proportional to each group's content size.
   //   3. Chunk each group's variants into pieces that fit its allocated budget.
   //   4. Take the cartesian product of all chunk sets so the union covers every combination.
   //   5. Cap total output at MAX_TOTAL_QUERIES; the UI warns when coverage is partial.
-  //
-  // Returns { queries, truncated } so the UI can distinguish "complete cover with N queries"
-  // from "we capped the cartesian and dropped combos".
-  const buildSplitQueries = () => {
+  const buildSplitQueriesAnd = () => {
     const active = [];
     for (let i = 0; i < tokenGroups.length; i++) {
       const variants = variantsForGroup(i);
@@ -752,7 +788,7 @@ export default function MisspelledApp() {
     };
   };
 
-  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings]);
+  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, combinedMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(() => combinedQueries.map(q => buildEbayUrl(q, ebayOpts)), [combinedQueries, ebayOpts]);
   const isSplit = combinedQueries.length > 1;
@@ -763,10 +799,13 @@ export default function MisspelledApp() {
   const groupsWithVariants = variantsPerGroup.filter(n => n > 0).length;
   const totalSelectedTypos = selected.size;
 
-  // ===== Individual typo search: replace this token with the typo, leave others correct =====
+  // Individual typo search: open eBay for ONLY the misspelled word. The previous
+  // behavior (variant ANDed with other correct tokens) returned 0 results when no
+  // listing contained both -- which is the common case for typo hunting, since a
+  // seller who misspells one word usually doesn't spell the other word correctly
+  // either, or the typo is on a brand name whose model number is also lost.
   const openTypoSearch = (groupIdx, typoWord) => {
-    const q = tokens.map((t, i) => i === groupIdx ? typoWord : t).join(' ');
-    window.open(buildEbayUrl(q, ebayOpts), '_blank', 'noopener,noreferrer');
+    window.open(buildEbayUrl(typoWord, ebayOpts), '_blank', 'noopener,noreferrer');
   };
 
   const copyToClipboard = async (text, label) => {
@@ -1300,7 +1339,7 @@ export default function MisspelledApp() {
                           </div>
                           <button
                             onClick={(e) => { e.stopPropagation(); openTypoSearch(gIdx, t.word); }}
-                            title={`Search "${tokens.map((tok, i) => i === gIdx ? t.word : tok).join(' ')}" on eBay`}
+                            title={`Search "${t.word}" alone on eBay (the combined search button below filters by other tokens)`}
                             style={{
                               width: '24px', height: '24px', flexShrink: 0,
                               border: `1.5px solid ${c.border}`, background: c.bg, color: c.text,
@@ -1327,7 +1366,7 @@ export default function MisspelledApp() {
           }}>
             <div className="typewriter" style={{
               fontSize: '11px', letterSpacing: '0.2em', marginBottom: '10px', color: '#b45309',
-              display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
+              display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
             }}>
               <Sparkles size={12} /> COMBINED SEARCH
               <span style={{ color: '#78716c', fontWeight: '400', letterSpacing: '0.05em' }}>
@@ -1339,6 +1378,37 @@ export default function MisspelledApp() {
                   </span>
                 )}
               </span>
+              <div style={{ flex: 1 }} />
+              <div style={{ display: 'inline-flex', border: '1.5px solid #b45309' }}>
+                <button
+                  onClick={() => setCombinedMode('or')}
+                  className="typewriter"
+                  title="ANY variant matches. Listing only needs one of (mamiya, amiya, rb67). Best for typo hunting."
+                  style={{
+                    padding: '4px 10px', border: 'none', cursor: 'pointer',
+                    fontSize: '10px', letterSpacing: '0.1em',
+                    fontFamily: "'Special Elite', monospace",
+                    background: combinedMode === 'or' ? '#b45309' : 'transparent',
+                    color: combinedMode === 'or' ? '#fefdf8' : '#b45309',
+                  }}
+                >
+                  OR (ANY)
+                </button>
+                <button
+                  onClick={() => setCombinedMode('and')}
+                  className="typewriter"
+                  title="One variant per group must match. (mamiya OR amiya) AND (rb67 OR rb6t). Strict normal-search behavior."
+                  style={{
+                    padding: '4px 10px', border: 'none', borderLeft: '1.5px solid #b45309',
+                    cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em',
+                    fontFamily: "'Special Elite', monospace",
+                    background: combinedMode === 'and' ? '#b45309' : 'transparent',
+                    color: combinedMode === 'and' ? '#fefdf8' : '#b45309',
+                  }}
+                >
+                  AND (PER GROUP)
+                </button>
+              </div>
             </div>
 
             {combinedQueries.length === 0 ? (
@@ -1498,7 +1568,7 @@ export default function MisspelledApp() {
           textAlign: 'center', padding: '24px 16px', fontSize: '11px', color: '#78716c',
         }}>
           <div className="typewriter" style={{ letterSpacing: '0.15em', marginBottom: '4px' }}>
-            EBAY SYNTAX: (a,b,c) = OR within group · multiple groups = AND across · -term = exclude
+            EBAY SYNTAX: (a,b,c) = OR group · space between groups = AND · -term = exclude · click a typo card to search that word alone
           </div>
           <div style={{ fontSize: '10.5px', fontStyle: 'italic' }}>
             Sellers who can't spell don't get top dollar. Happy hunting.
