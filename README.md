@@ -1,88 +1,83 @@
 # MISSPELLED
 
-A single-file React app for finding misspelled eBay listings. Drop the HTML anywhere static and it just works.
+Find eBay bargains by searching for listings with typos in the title. Sellers who misspell their listings get fewer views, which means lower prices for you.
 
-The whole thing is one self-contained `index.html` (~58 KB). React 18, ReactDOM, and lucide-react are pulled from esm.sh at runtime via an import map. No build step, no dependencies, no package.json.
+MISSPELLED generates hundreds of common misspellings for any search term, then builds eBay search URLs that find those overlooked listings.
 
-## Deploy to GitHub Pages
+## How to use it
 
-Three options depending on how minimal you want the repo.
+**1. Enter a search term**
 
-### Option 1: Dedicated repo (simplest)
+Type any item, brand, or model into the search box — e.g. `mamiya rb67`, `patek philippe`, or `iphone 14 pro max`. Multi-word queries are split into separate tokens, and typos are generated for each word independently.
 
-```bash
-mkdir misspelled && cd misspelled
-git init
-cp /path/to/index.html .
-git add index.html
-git commit -m "Initial commit"
-git branch -M main
-gh repo create misspelled --public --source=. --push
-gh repo edit --enable-pages --pages-branch main
-```
+**2. Pick your typo types**
 
-Site goes live at `https://<username>.github.io/misspelled/`. Takes 1-2 minutes after the first push.
+Choose from 17 misspelling strategies:
 
-If you don't use the `gh` CLI: create the repo through the web UI, push, then in Settings, Pages, set Source to "Deploy from a branch", Branch: main, Folder: /.
+| Type | Example |
+|------|---------|
+| Missing letter | `canon` → `anon` |
+| Swapped letters | `canon` → `acnon` |
+| Doubled letter | `canon` → `ccanon` |
+| Neighbor key | `canon` → `xanon` |
+| Phonetic swap | `canon` → `kanon` |
+| Vowel swap | `mamiya` → `memiya` |
+| Collapsed doubles | `philippe` → `philipe` |
+| UK/US spelling | `aluminum` → `aluminium` |
+| Visual lookalikes | `rn` → `m` (OCR errors) |
+| Number/letter | `0` ↔ `o`, `1` ↔ `l` |
+| …and more | spacing, plurals, hyphens, case |
 
-### Option 2: Add to an existing repo under /docs
+**3. Set eBay filters**
 
-```bash
-cp /path/to/index.html your-repo/docs/index.html
-cd your-repo
-git add docs/index.html
-git commit -m "Add MISSPELLED typo search"
-git push
-```
+Narrow results by region (10 eBay sites), category, price range, condition, listing type, and sort order. Supports QWERTY, QWERTZ, and AZERTY keyboard layouts for accurate neighbor-key typos.
 
-Then in repo Settings, Pages, set Source to "Deploy from a branch", Branch: main (or whatever), Folder: /docs. Lives at `https://<username>.github.io/<repo>/`.
+**4. Select and search**
 
-### Option 3: gh-pages branch
+Review the generated variants, toggle individual typos on or off, add custom misspellings, then hit search. The app automatically splits long queries across multiple eBay searches (up to 25 tabs, 250 characters each) and warns if results would be truncated.
 
-```bash
-cd your-repo
-git checkout --orphan gh-pages
-git rm -rf .
-cp /path/to/index.html .
-git add index.html
-git commit -m "MISSPELLED"
-git push -u origin gh-pages
-git checkout main
-```
+## Running locally
 
-Then enable Pages on the gh-pages branch.
-
-## Files in this drop
-
-- `index.html` is the production build. Self-contained, deploy as-is.
-- `MisspelledApp.jsx` is the readable React source if you want to modify and rebuild.
-
-## Rebuilding from source
-
-If you want to tweak the source and regenerate the HTML:
-
-```bash
-# Strip the React/Lucide imports and the export default (they live in the wrapper)
-sed 's|^import React.*from .react.;|// |; s|^import {.*} from .lucide-react.;|// |; s|^export default function MisspelledApp|function MisspelledApp|' MisspelledApp.jsx > build_input.jsx
-
-# Compile JSX to JS
-npx esbuild build_input.jsx --format=esm --target=es2020 > app.js
-
-# Then paste app.js into the <script type="module"> block in index.html,
-# after the import statements and before the createRoot(...) call.
-```
-
-## Local dev
+The whole app is a single self-contained `index.html` (~73 KB). No build step needed.
 
 ```bash
 python3 -m http.server 8000
 # open http://localhost:8000
 ```
 
-That's it. The import-map approach means no Node, no Webpack, no Vite. Browsers fetch React directly from esm.sh on page load.
+Or with npm:
 
-## Caveats
+```bash
+npm install
+npm run serve
+# http://localhost:8765
+```
 
-- esm.sh is a third-party CDN. If it's down, the page won't load. For belt-and-suspenders you could self-host the bundled React from a local /vendor folder, but that costs you the single-file simplicity.
-- Popup blockers may interfere when "OPEN ALL N IN TABS" tries to open more than 5-8 tabs at once. The fallback link list below the button works one-click-at-a-time.
-- eBay rate-limits searches from the same IP. Don't fire all 25 tabs in rapid succession across many different searches or you'll get throttled briefly.
+## Deploying
+
+Drop `index.html` on any static host — GitHub Pages, Netlify, S3, whatever. React 18 and Lucide icons are loaded from [esm.sh](https://esm.sh) at runtime via an import map, so there's nothing to bundle.
+
+For GitHub Pages, the quickest path:
+
+```bash
+gh repo create misspelled --public --source=. --push
+gh repo edit --enable-pages --pages-branch main
+```
+
+Your site goes live at `https://<username>.github.io/misspelled/`.
+
+## Modifying the source
+
+Edit `MisspelledApp.jsx`, then rebuild:
+
+```bash
+npm run build
+```
+
+This compiles the JSX with esbuild and splices it into `index.html`.
+
+## Good to know
+
+- **Popup blockers** may interfere when opening many tabs at once. The fallback link list below the button works one at a time.
+- **eBay rate-limits** searches from the same IP, so avoid firing all 25 tabs in rapid succession across many searches.
+- **esm.sh** is a third-party CDN. If it goes down, the page won't load. You can self-host React from a `/vendor` folder if needed.
