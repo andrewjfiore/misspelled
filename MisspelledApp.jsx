@@ -910,13 +910,14 @@ export default function MisspelledApp() {
   const groupsWithVariants = variantsPerGroup.filter(n => n > 0).length;
   const totalSelectedTypos = selected.size;
 
-  // Individual typo search: open eBay for ONLY the misspelled word. The previous
-  // behavior (variant ANDed with other correct tokens) returned 0 results when no
-  // listing contained both -- which is the common case for typo hunting, since a
-  // seller who misspells one word usually doesn't spell the other word correctly
-  // either, or the typo is on a brand name whose model number is also lost.
+  // Individual typo search: open eBay for ONLY the misspelled word. Quote the word so
+  // eBay treats it as a literal phrase and skips its autocorrect/spell-rewrite engine
+  // (which silently rewrites bare misspellings to the canonical brand and serves up
+  // listings that don't actually contain the typo). Verified 2026-06-08: bare 'hasselbald'
+  // returns 18k autocorrected hasselblad listings; quoted '"hasselbald"' returns the
+  // ~50 real listings whose title contains the typo, which is what we actually want.
   const openTypoSearch = (groupIdx, typoWord) => {
-    window.open(buildEbayUrl(typoWord, ebayOpts), '_blank', 'noopener,noreferrer');
+    window.open(buildEbayUrl(`"${typoWord}"`, ebayOpts), '_blank', 'noopener,noreferrer');
   };
 
   const copyToClipboard = async (text, label) => {

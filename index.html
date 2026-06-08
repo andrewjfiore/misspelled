@@ -46,6 +46,7 @@
 
 
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -916,7 +917,7 @@ function MisspelledApp() {
   const groupsWithVariants = variantsPerGroup.filter((n) => n > 0).length;
   const totalSelectedTypos = selected.size;
   const openTypoSearch = (groupIdx, typoWord) => {
-    window.open(buildEbayUrl(typoWord, ebayOpts), "_blank", "noopener,noreferrer");
+    window.open(buildEbayUrl(`"${typoWord}"`, ebayOpts), "_blank", "noopener,noreferrer");
   };
   const copyToClipboard = async (text, label) => {
     try {
@@ -1774,6 +1775,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
 
 
