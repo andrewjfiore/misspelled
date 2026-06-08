@@ -112,6 +112,17 @@ function generatePhonetic(word) {
     ['tion','sion'],['sion','tion'],
     // Greek-letter glyph/spelling confusions (e.g. Sony Alpha listings written as α / a / cx)
     ['alpha','cx'],['cx','alpha'],['alpha','a'],
+    // 10 cross-language phoneme confusions common in eBay brand misspellings:
+    ['j','g'],['g','j'],          // soft-g (fujifilm <-> fugifilm)
+    ['j','y'],['y','j'],          // Spanish/Slavic (yamaha <-> jamaha)
+    ['w','v'],['v','w'],          // German consonant (voigtlander <-> woigtlander)
+    ['v','b'],['b','v'],          // Spanish b/v collapse (vivitar <-> bibitar)
+    ['sch','sh'],['sh','sch'],    // German digraph (schneider <-> shneider)
+    ['ch','k'],['k','ch'],        // German hard-ch (bach <-> bak)
+    ['ks','x'],['x','ks'],        // pentax <-> pentaks
+    ['qu','kw'],['kw','qu'],      // quasar <-> kwasar
+    ['dt','t'],['t','dt'],        // German final-cluster collapse (schmidt <-> schmit)
+    ['th','t'],['t','th'],        // English speakers drop the 'h'
   ];
   const lower = word.toLowerCase();
   for (const [from, to] of subs) {
@@ -377,10 +388,11 @@ const SORT_OPTIONS = [
 function buildEbayUrl(query, options) {
   const params = new URLSearchParams();
   params.set('_nkw', query);
-  // _in_kw=2 = eBay's "Any words, any order" mode. Use this for OR queries because
-  // the (a,b,c) paren-OR syntax silently returns 0 results on long term lists -- eBay
-  // treats the parens and commas as literal characters in the search string.
-  if (options.anyWords) params.set('_in_kw', '2');
+  // Do NOT use _in_kw=2 ("any words, any order") -- eBay Boolean-rewrites the term list and
+  // pulls a trailing `-foo` exclusion *inside* the rewritten paren-OR group, treating it as
+  // a literal OR'd keyword. The exclusion is silently lost and the query matches everything.
+  // Verified 2026-06-08 via direct eBay testing. Use the default _in_kw (omit it) with the
+  // documented (a,b,c) -excl grammar instead. See eBay Developers KB 2190.
   if (options.category && options.category !== 'all') params.set('_sacat', options.category);
   if (options.condition && options.condition !== 'all') params.set('LH_ItemCondition', options.condition);
   if (options.minPrice) params.set('_udlo', options.minPrice);
@@ -402,19 +414,19 @@ const TYPO_TYPES = [
   { key: 'swapped', label: 'Swapped letters', symbol: '<>', desc: 'Adjacent letters flipped (cod -> ocd)', defaultOn: true, color: 'amber' },
   { key: 'doubled', label: 'Doubled letter', symbol: 'XX', desc: 'A letter typed twice (cod -> ccod)', defaultOn: true, color: 'olive' },
   { key: 'replaced', label: 'Neighbor key', symbol: '~', desc: 'Adjacent key hit instead (cod -> xod)', defaultOn: true, color: 'teal' },
-  { key: 'inserted', label: 'Extra neighbor', symbol: '+', desc: 'Adjacent key added (cod -> xcod)', defaultOn: false, color: 'ink' },
-  { key: 'phonetic', label: 'Phonetic', symbol: 'Φ', desc: 'Sound-alike (c/k, ph/f, alpha/cx)', defaultOn: false, color: 'rust' },
+  { key: 'inserted', label: 'Extra neighbor', symbol: '+', desc: 'Adjacent key added (cod -> xcod)', defaultOn: true, color: 'ink' },
+  { key: 'phonetic', label: 'Phonetic', symbol: 'Φ', desc: 'Sound-alike (c/k, ph/f, alpha/cx)', defaultOn: true, color: 'rust' },
   { key: 'vowel_epen', label: 'Vowel epenthesis', symbol: 'V+', desc: 'Vowel inserted between consonants (tamron -> tamaron)', defaultOn: true, color: 'rust' },
   { key: 'collapse_doubles', label: 'Collapse doubles', symbol: 'Xx', desc: 'Double letter to single (philippe -> philipe)', defaultOn: true, color: 'amber' },
-  { key: 'vowel_swap', label: 'Vowel swap', symbol: 'aei', desc: 'Vowel replaced with another (mamiya -> memiya)', defaultOn: false, color: 'olive' },
-  { key: 'hard_ck', label: 'Hard C/K', symbol: 'c/k', desc: 'Word-start c/k swap, end c/ck (canon -> kanon)', defaultOn: false, color: 'teal' },
+  { key: 'vowel_swap', label: 'Vowel swap', symbol: 'aei', desc: 'Vowel replaced with another (mamiya -> memiya)', defaultOn: true, color: 'olive' },
+  { key: 'hard_ck', label: 'Hard C/K', symbol: 'c/k', desc: 'Word-start c/k swap, end c/ck (canon -> kanon)', defaultOn: true, color: 'teal' },
   { key: 'regional', label: 'UK/US spelling', symbol: 'UK', desc: 'British/American variants (aluminum/aluminium)', defaultOn: true, color: 'rust' },
-  { key: 'hyphenation', label: 'Hyphenation', symbol: '-/', desc: 'Hyphens added/removed (iphone -> i-phone)', defaultOn: false, color: 'olive' },
-  { key: 'plural', label: 'Plural +/-s', symbol: '+s', desc: 'Trailing s added or removed (photo -> photos)', defaultOn: false, color: 'teal' },
-  { key: 'ocr', label: 'Visual lookalikes', symbol: 'rn', desc: 'Handwriting/OCR (rn/m, cl/d, vv/w)', defaultOn: false, color: 'ink' },
-  { key: 'numletter', label: 'Number/letter', symbol: '01', desc: '0/o, 1/l, 5/s confusions', defaultOn: false, color: 'amber' },
-  { key: 'spacing', label: 'Spacing', symbol: '_', desc: 'Space added or removed', defaultOn: false, color: 'olive' },
-  { key: 'case', label: 'Case', symbol: 'Aa', desc: 'Different capitalization', defaultOn: false, color: 'teal' },
+  { key: 'hyphenation', label: 'Hyphenation', symbol: '-/', desc: 'Hyphens added/removed (iphone -> i-phone)', defaultOn: true, color: 'olive' },
+  { key: 'plural', label: 'Plural +/-s', symbol: '+s', desc: 'Trailing s added or removed (photo -> photos)', defaultOn: true, color: 'teal' },
+  { key: 'ocr', label: 'Visual lookalikes', symbol: 'rn', desc: 'Handwriting/OCR (rn/m, cl/d, vv/w)', defaultOn: true, color: 'ink' },
+  { key: 'numletter', label: 'Number/letter', symbol: '01', desc: '0/o, 1/l, 5/s confusions', defaultOn: true, color: 'amber' },
+  { key: 'spacing', label: 'Spacing', symbol: '_', desc: 'Space added or removed', defaultOn: true, color: 'olive' },
+  { key: 'case', label: 'Case', symbol: 'Aa', desc: 'Different capitalization', defaultOn: true, color: 'teal' },
 ];
 
 const COLOR_MAP = {
@@ -452,6 +464,13 @@ export default function MisspelledApp() {
   // Free-form exclude list (-term in eBay query). Default empty so we match any spelling broadly.
   const [excludeStrings, setExcludeStrings] = useState([]);
   const [excludeInput, setExcludeInput] = useState('');
+
+  // Free-form INCLUDE list: terms appended verbatim (not misspelled) to every generated
+  // sub-query. eBay AND-joins them with the typo group. Use case: brand+model where only
+  // the brand should be misspelled and the model number must appear literally
+  // (e.g. word="fujifilm", include="gfx" -> (fujfilm,fujifim,...) gfx).
+  const [includeStrings, setIncludeStrings] = useState([]);
+  const [includeInput, setIncludeInput] = useState('');
 
   const [copiedTerm, setCopiedTerm] = useState(null);
 
@@ -539,6 +558,11 @@ export default function MisspelledApp() {
 
   const totalTypos = tokenGroups.reduce((sum, g) => sum + g.typos.length, 0);
 
+  // Effective combined-search mode: with only one token group, AND and OR are semantically
+  // identical (no per-group ANDing happens) -- but OR produces a cleaner flat URL with no
+  // parens. Force OR in that case so the toggle's choice is irrelevant and the URL is simpler.
+  const effectiveMode = tokenGroups.length <= 1 ? 'or' : combinedMode;
+
   // Stats by type (across all groups)
   const statsByType = useMemo(() => {
     const s = {};
@@ -624,6 +648,17 @@ export default function MisspelledApp() {
   };
   const clearExcludes = () => setExcludeStrings([]);
 
+  // ===== Include string handlers =====
+  const addIncludeString = () => {
+    const t = includeInput.trim();
+    if (t && !includeStrings.includes(t)) {
+      setIncludeStrings([...includeStrings, t]);
+      setIncludeInput('');
+    }
+  };
+  const removeIncludeString = (t) => setIncludeStrings(includeStrings.filter(x => x !== t));
+  const clearIncludes = () => setIncludeStrings([]);
+
   // ===== Query building =====
   // eBay truncates _nkw beyond ~300 chars. Keep some headroom for URL encoding.
   const MAX_QUERY_LEN = 250;
@@ -643,34 +678,84 @@ export default function MisspelledApp() {
     return [...new Set(variants)];
   };
 
-  const quoteVariant = (v) => v.includes(' ') ? `"${v}"` : v;
+  // Wrap in quotes when the variant contains a space (spacing typos) OR a hyphen
+  // (hyphenation typos). Without quoting, eBay's tokenizer splits on '-' and treats
+  // anything after a leading '-' as an exclusion -- so a typo like 'mam-iya' would be
+  // parsed as "include mam, EXCLUDE iya", silently filtering out matching listings.
+  const quoteVariant = (v) => /[\s-]/.test(v) ? `"${v}"` : v;
+  // Always emit a paren-OR group, even for a single variant. A single bare token (or
+  // a single term in parens) triggers eBay's autocorrect/spell-rewrite engine, which
+  // silently swaps the typo for the canonical brand and returns the wrong listings.
+  // Duplicating the lone variant -> `(typo,typo)` forces paren-OR semantics (2+ terms)
+  // and disables autocorrect; the OR-with-itself is a no-op for matching.
   const formatGroup = (variants) => {
     const quoted = variants.map(quoteVariant);
-    return quoted.length === 1 ? quoted[0] : `(${quoted.join(',')})`;
+    if (quoted.length === 0) return '';
+    if (quoted.length === 1) return `(${quoted[0]},${quoted[0]})`;
+    return `(${quoted.join(',')})`;
+  };
+
+  // Correct tokens whose group is toggled "exclude correct" — these get auto-appended
+  // as -correct exclusions OUTSIDE the parens so eBay actually filters out the correctly
+  // spelled listings (otherwise dropping them from the variant list just makes the search
+  // not require them, which doesn't exclude anything).
+  const autoExcludedCorrect = () => {
+    const out = [];
+    tokenGroups.forEach((g, i) => {
+      if (g && excludeCorrectFor.has(i) && g.token) out.push(g.token);
+    });
+    return out;
   };
 
   const buildExcludeSuffix = () => {
     let suffix = '';
-    for (const ex of excludeStrings) {
-      const e = ex.trim();
-      if (!e) continue;
+    const seen = new Set();
+    for (const ex of [...autoExcludedCorrect(), ...excludeStrings]) {
+      const e = (ex || '').trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
       suffix += ` -${e.includes(' ') ? `"${e}"` : e}`;
     }
     return suffix;
   };
 
+  // Required literal terms, appended verbatim to every chunk's query. eBay AND-joins them
+  // with the typo paren-OR group: `(typo1,typo2,...) gfx -broken` matches listings that
+  // contain any typo AND the literal word "gfx" AND do not contain "broken".
+  const buildIncludeSuffix = () => {
+    let suffix = '';
+    const seen = new Set();
+    for (const inc of includeStrings) {
+      const e = (inc || '').trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
+      suffix += ` ${e.includes(' ') ? `"${e}"` : e}`;
+    }
+    return suffix;
+  };
+
+  // Combined trailing suffix that every chunk gets: required terms first, then exclusions.
+  // Order is cosmetic (eBay grammar doesn't care) but makes the URL easier to read.
+  const buildFixedSuffix = () => buildIncludeSuffix() + buildExcludeSuffix();
+
   // Chunk a single group's variants into pieces, each formatted as a complete group string,
   // such that each piece's length stays at or under `budget`.
   // budget is the total budget INCLUDING the parens (if applicable).
+  const MAX_PAREN_OR_TERMS = 8; // eBay paren-OR cap: 8 terms work, 9+ → null SRP. Verified 2026-06-08.
   const chunkGroupVariants = (variants, budget) => {
-    if (variants.length === 1) return [quoteVariant(variants[0])];
+    if (variants.length === 1) {
+      const q = quoteVariant(variants[0]);
+      return [`(${q},${q})`]; // duplicate-to-2 so eBay does not autocorrect a lone term
+    }
     const innerBudget = budget - 2; // subtract the two parens chars
     const chunks = [];
     let cur = [], curLen = 0;
     for (const v of variants) {
       const vStr = quoteVariant(v);
       const addLen = vStr.length + (cur.length > 0 ? 1 : 0); // +1 for comma when not first
-      if (curLen + addLen > innerBudget && cur.length > 0) {
+      const wouldOverflow = curLen + addLen > innerBudget;
+      const wouldExceedTermCap = cur.length >= MAX_PAREN_OR_TERMS;
+      if ((wouldOverflow || wouldExceedTermCap) && cur.length > 0) {
         chunks.push(cur);
         cur = [vStr];
         curLen = vStr.length;
@@ -686,13 +771,20 @@ export default function MisspelledApp() {
   // Split the combined query into 1+ sub-queries that each fit under MAX_QUERY_LEN.
   // Returns { queries, truncated }. Branches on combinedMode.
   const buildSplitQueries = () => {
-    return combinedMode === 'or' ? buildSplitQueriesOr() : buildSplitQueriesAnd();
+    return effectiveMode === 'or' ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
 
-  // OR mode: flatten all variants into a space-separated list and rely on
-  // eBay's _in_kw=2 ("Any words, any order") to OR them. The (a,b,c) paren syntax
-  // silently fails on long term lists -- eBay treats the parens/commas as literal
-  // chars in the search string. _in_kw=2 is the documented advanced-search mode.
+  // OR mode: emit eBay's documented (a,b,c) paren-OR with the exclusion OUTSIDE the parens:
+  //   (typo1,typo2,...,typoN) -correct
+  //
+  // Two hard rules verified empirically against live eBay 2026-06-08:
+  //   1. Paren-OR groups cap at 8 terms. 9+ -> null SRP ("Let's try that again").
+  //   2. A SINGLE typo (bare or in (parens) with 1 term) triggers eBay's autocorrect, which
+  //      silently rewrites it to the canonical brand and returns the canonical's listings
+  //      instead of typo-matched ones. 2+ terms in paren-OR disables autocorrect.
+  // So every emitted chunk must have between 2 and MAX_OR_TERMS_PER_GROUP variants. If we
+  // have exactly 1 variant total we duplicate it (`(typo,typo)`) to force paren-OR mode.
+  const MAX_OR_TERMS_PER_GROUP = 8;
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -702,30 +794,37 @@ export default function MisspelledApp() {
     }
     if (all.length === 0) return { queries: [], truncated: false };
 
-    const excludeSuffix = buildExcludeSuffix();
+    const fixedSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
-    const oneShot = quoted.join(' ') + excludeSuffix;
-    if (oneShot.length <= MAX_QUERY_LEN) return { queries: [oneShot], truncated: false };
+    const budget = MAX_QUERY_LEN - fixedSuffix.length;
 
-    // Chunk space-separated terms (no paren overhead).
-    const budget = MAX_QUERY_LEN - excludeSuffix.length;
-    const chunks = [];
-    let cur = [], curLen = 0;
-    for (const v of quoted) {
-      const addLen = v.length + (cur.length > 0 ? 1 : 0);
-      if (curLen + addLen > budget && cur.length > 0) {
-        chunks.push(cur);
-        cur = [v];
-        curLen = v.length;
-      } else {
-        cur.push(v);
-        curLen += addLen;
-      }
-    }
-    if (cur.length > 0) chunks.push(cur);
+    // Distribute terms evenly across the minimum number of chunks so sizes differ by
+    // at most one. Avoids the failure mode where naive packing leaves a 1-term tail
+    // chunk that hits eBay's autocorrect.
+    const minChunks = Math.ceil(quoted.length / MAX_OR_TERMS_PER_GROUP);
+    const chunks = Array.from({ length: minChunks }, () => []);
+    quoted.forEach((v, i) => chunks[i % minChunks].push(v));
+
+    // Force paren-OR semantics (2+ terms) on every chunk, including the single-variant
+    // case, by duplicating the lone term. eBay treats `(typo,typo)` the same as `typo`
+    // for matching but skips autocorrect because there are 2 terms in the OR group.
+    const padToTwo = (chunk) => chunk.length === 1 ? [chunk[0], chunk[0]] : chunk;
+
+    // Char-budget safety. Halve any oversized chunk until each piece fits the budget,
+    // never going below 2 terms (which would re-trigger autocorrect).
+    const safeChunks = [];
+    const splitToBudget = (chunk) => {
+      const padded = padToTwo(chunk);
+      const groupStr = `(${padded.join(',')})`;
+      if (groupStr.length <= budget || padded.length <= 2) { safeChunks.push(padded); return; }
+      const mid = Math.ceil(padded.length / 2);
+      splitToBudget(padded.slice(0, mid));
+      splitToBudget(padded.slice(mid));
+    };
+    chunks.forEach(splitToBudget);
 
     let truncated = false;
-    let final = chunks.map(c => c.join(' ') + excludeSuffix);
+    let final = safeChunks.map(c => `(${c.join(',')})` + fixedSuffix);
     if (final.length > MAX_TOTAL_QUERIES) {
       final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
@@ -747,12 +846,12 @@ export default function MisspelledApp() {
     }
     if (active.length === 0) return { queries: [], truncated: false };
 
-    const excludeSuffix = buildExcludeSuffix();
-    const fullQuery = active.map(g => formatGroup(g.variants)).join(' ') + excludeSuffix;
+    const fixedSuffix = buildFixedSuffix();
+    const fullQuery = active.map(g => formatGroup(g.variants)).join(' ') + fixedSuffix;
     if (fullQuery.length <= MAX_QUERY_LEN) return { queries: [fullQuery], truncated: false };
 
     const interGroupSpaces = Math.max(0, active.length - 1);
-    const totalBudget = MAX_QUERY_LEN - excludeSuffix.length - interGroupSpaces;
+    const totalBudget = MAX_QUERY_LEN - fixedSuffix.length - interGroupSpaces;
 
     const minBudgets = active.map(g => Math.max(...g.variants.map(v => quoteVariant(v).length)) + 2);
     const totalMin = minBudgets.reduce((a, b) => a + b, 0);
@@ -772,7 +871,7 @@ export default function MisspelledApp() {
         combos = next;
       }
       return {
-        queries: combos.map(c => c.join(' ') + excludeSuffix),
+        queries: combos.map(c => c.join(' ') + fixedSuffix),
         truncated: natural > MAX_TOTAL_QUERIES,
       };
     }
@@ -803,16 +902,16 @@ export default function MisspelledApp() {
     }
 
     return {
-      queries: combos.map(c => c.join(' ') + excludeSuffix),
+      queries: combos.map(c => c.join(' ') + fixedSuffix),
       truncated: naturalCartesian > MAX_TOTAL_QUERIES,
     };
   };
 
-  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, combinedMode]);
+  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, includeStrings, effectiveMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(
-    () => combinedQueries.map(q => buildEbayUrl(q, { ...ebayOpts, anyWords: combinedMode === 'or' })),
-    [combinedQueries, ebayOpts, combinedMode]
+    () => combinedQueries.map(q => buildEbayUrl(q, ebayOpts)),
+    [combinedQueries, ebayOpts, effectiveMode]
   );
   const isSplit = combinedQueries.length > 1;
   const isTruncated = splitResult.truncated;
@@ -822,13 +921,14 @@ export default function MisspelledApp() {
   const groupsWithVariants = variantsPerGroup.filter(n => n > 0).length;
   const totalSelectedTypos = selected.size;
 
-  // Individual typo search: open eBay for ONLY the misspelled word. The previous
-  // behavior (variant ANDed with other correct tokens) returned 0 results when no
-  // listing contained both -- which is the common case for typo hunting, since a
-  // seller who misspells one word usually doesn't spell the other word correctly
-  // either, or the typo is on a brand name whose model number is also lost.
+  // Individual typo search: open eBay for ONLY the misspelled word. Quote the word so
+  // eBay treats it as a literal phrase and skips its autocorrect/spell-rewrite engine
+  // (which silently rewrites bare misspellings to the canonical brand and serves up
+  // listings that don't actually contain the typo). Verified 2026-06-08: bare 'hasselbald'
+  // returns 18k autocorrected hasselblad listings; quoted '"hasselbald"' returns the
+  // ~50 real listings whose title contains the typo, which is what we actually want.
   const openTypoSearch = (groupIdx, typoWord) => {
-    window.open(buildEbayUrl(typoWord, ebayOpts), '_blank', 'noopener,noreferrer');
+    window.open(buildEbayUrl(`"${typoWord}"`, ebayOpts), '_blank', 'noopener,noreferrer');
   };
 
   const copyToClipboard = async (text, label) => {
@@ -1105,6 +1205,83 @@ export default function MisspelledApp() {
             </div>
           </section>
         )}
+
+        {/* ===== INCLUDE STRINGS ===== */}
+        <section style={{
+          background: '#fefdf8', border: '2px solid #1c1917', padding: '16px', marginBottom: '20px',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '8px', marginBottom: '12px', flexWrap: 'wrap',
+          }}>
+            <div className="typewriter" style={{
+              fontSize: '11px', letterSpacing: '0.2em', color: '#57534e',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <Sparkles size={12} /> REQUIRE IN EVERY SEARCH
+              <span style={{ marginLeft: '4px', color: '#a8a29e', fontWeight: '400', letterSpacing: '0.05em' }}>
+                (literal term, not misspelled, AND'd to every chunk)
+              </span>
+            </div>
+            {includeStrings.length > 0 && (
+              <button
+                onClick={clearIncludes}
+                className="typewriter"
+                style={{
+                  padding: '4px 10px', border: '1.5px solid #b45309', background: 'transparent',
+                  color: '#b45309', cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em',
+                  fontFamily: "'Special Elite', monospace",
+                }}
+              >
+                CLEAR
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', marginBottom: includeStrings.length ? '12px' : '0' }}>
+            <input
+              type="text"
+              value={includeInput}
+              onChange={e => setIncludeInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addIncludeString()}
+              placeholder="Term to require literally, e.g. 'gfx', 'rb67', '50mm'"
+              className="mono"
+              style={{ flex: 1, padding: '8px 12px', border: '2px solid #1c1917', background: '#fefdf8', fontSize: '14px' }}
+            />
+            <button onClick={addIncludeString} className="btn-shadow typewriter" style={{
+              padding: '8px 16px', border: '2px solid #1c1917', background: '#b45309',
+              color: '#fefdf8', cursor: 'pointer', fontSize: '13px', letterSpacing: '0.1em', fontFamily: 'inherit',
+            }}>
+              REQUIRE
+            </button>
+          </div>
+          {includeStrings.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {includeStrings.map(t => (
+                <div key={t} className="mono" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '4px 8px', background: '#fef7e6', border: '1.5px solid #b45309',
+                  fontSize: '13px', color: '#92400e',
+                }}>
+                  <span style={{ color: '#b45309', fontWeight: '700' }}>{'+'}</span>
+                  <span>{t}</span>
+                  <button onClick={() => removeIncludeString(t)} style={{
+                    border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+                    display: 'flex', alignItems: 'center', color: '#b45309',
+                  }}>
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="typewriter" style={{
+              fontSize: '10px', letterSpacing: '0.1em', color: '#a8a29e',
+            }}>
+              No required terms. Each chunk searches only the typo variants.
+            </div>
+          )}
+        </section>
 
         {/* ===== EXCLUDE STRINGS ===== */}
         <section style={{
@@ -1402,36 +1579,45 @@ export default function MisspelledApp() {
                 )}
               </span>
               <div style={{ flex: 1 }} />
-              <div style={{ display: 'inline-flex', border: '1.5px solid #b45309' }}>
-                <button
-                  onClick={() => setCombinedMode('or')}
-                  className="typewriter"
-                  title="ANY variant matches. Listing only needs one of (mamiya, amiya, rb67). Best for typo hunting."
-                  style={{
-                    padding: '4px 10px', border: 'none', cursor: 'pointer',
-                    fontSize: '10px', letterSpacing: '0.1em',
-                    fontFamily: "'Special Elite', monospace",
-                    background: combinedMode === 'or' ? '#b45309' : 'transparent',
-                    color: combinedMode === 'or' ? '#fefdf8' : '#b45309',
-                  }}
-                >
-                  OR (ANY)
-                </button>
-                <button
-                  onClick={() => setCombinedMode('and')}
-                  className="typewriter"
-                  title="One variant per group must match. (mamiya OR amiya) AND (rb67 OR rb6t). Strict normal-search behavior."
-                  style={{
-                    padding: '4px 10px', border: 'none', borderLeft: '1.5px solid #b45309',
-                    cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em',
-                    fontFamily: "'Special Elite', monospace",
-                    background: combinedMode === 'and' ? '#b45309' : 'transparent',
-                    color: combinedMode === 'and' ? '#fefdf8' : '#b45309',
-                  }}
-                >
-                  AND (PER GROUP)
-                </button>
-              </div>
+              {tokenGroups.length > 1 ? (
+                <div style={{ display: 'inline-flex', border: '1.5px solid #b45309' }}>
+                  <button
+                    onClick={() => setCombinedMode('or')}
+                    className="typewriter"
+                    title="ANY variant matches. Listing only needs one of (mamiya, amiya, rb67). Best for typo hunting."
+                    style={{
+                      padding: '4px 10px', border: 'none', cursor: 'pointer',
+                      fontSize: '10px', letterSpacing: '0.1em',
+                      fontFamily: "'Special Elite', monospace",
+                      background: effectiveMode === 'or' ? '#b45309' : 'transparent',
+                      color: effectiveMode === 'or' ? '#fefdf8' : '#b45309',
+                    }}
+                  >
+                    OR (ANY)
+                  </button>
+                  <button
+                    onClick={() => setCombinedMode('and')}
+                    className="typewriter"
+                    title="One variant per group must match. (mamiya OR amiya) AND (rb67 OR rb6t). Strict normal-search behavior."
+                    style={{
+                      padding: '4px 10px', border: 'none', borderLeft: '1.5px solid #b45309',
+                      cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em',
+                      fontFamily: "'Special Elite', monospace",
+                      background: effectiveMode === 'and' ? '#b45309' : 'transparent',
+                      color: effectiveMode === 'and' ? '#fefdf8' : '#b45309',
+                    }}
+                  >
+                    AND (PER GROUP)
+                  </button>
+                </div>
+              ) : (
+                <span className="typewriter" style={{
+                  fontSize: '10px', letterSpacing: '0.1em', color: '#78716c',
+                  border: '1.5px solid #d6d3d1', padding: '4px 10px',
+                }} title="Single-token search: OR is used automatically (cleaner URL, same semantics).">
+                  OR (AUTO)
+                </span>
+              )}
             </div>
 
             {combinedQueries.length === 0 ? (
@@ -1591,7 +1777,7 @@ export default function MisspelledApp() {
           textAlign: 'center', padding: '24px 16px', fontSize: '11px', color: '#78716c',
         }}>
           <div className="typewriter" style={{ letterSpacing: '0.15em', marginBottom: '4px' }}>
-            EBAY: OR mode uses _in_kw=2 (any words) · AND mode uses (a,b,c) per group · -term = exclude · click a typo card to search that word alone
+            EBAY: both modes use (a,b,c) paren-OR · capped at 8 terms per group (eBay's real limit) · 2+ terms per group disables autocorrect · -term excludes outside the parens
           </div>
           <div style={{ fontSize: '10.5px', fontStyle: 'italic' }}>
             Sellers who can't spell don't get top dollar. Happy hunting.

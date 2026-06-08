@@ -39,6 +39,15 @@
 
 
 
+
+
+
+
+
+
+
+
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -221,7 +230,38 @@ function generatePhonetic(word) {
     // Greek-letter glyph/spelling confusions (e.g. Sony Alpha listings written as α / a / cx)
     ["alpha", "cx"],
     ["cx", "alpha"],
-    ["alpha", "a"]
+    ["alpha", "a"],
+    // 10 cross-language phoneme confusions common in eBay brand misspellings:
+    ["j", "g"],
+    ["g", "j"],
+    // soft-g (fujifilm <-> fugifilm)
+    ["j", "y"],
+    ["y", "j"],
+    // Spanish/Slavic (yamaha <-> jamaha)
+    ["w", "v"],
+    ["v", "w"],
+    // German consonant (voigtlander <-> woigtlander)
+    ["v", "b"],
+    ["b", "v"],
+    // Spanish b/v collapse (vivitar <-> bibitar)
+    ["sch", "sh"],
+    ["sh", "sch"],
+    // German digraph (schneider <-> shneider)
+    ["ch", "k"],
+    ["k", "ch"],
+    // German hard-ch (bach <-> bak)
+    ["ks", "x"],
+    ["x", "ks"],
+    // pentax <-> pentaks
+    ["qu", "kw"],
+    ["kw", "qu"],
+    // quasar <-> kwasar
+    ["dt", "t"],
+    ["t", "dt"],
+    // German final-cluster collapse (schmidt <-> schmit)
+    ["th", "t"],
+    ["t", "th"]
+    // English speakers drop the 'h'
   ];
   const lower = word.toLowerCase();
   for (const [from, to] of subs) {
@@ -480,7 +520,6 @@ const SORT_OPTIONS = [
 function buildEbayUrl(query, options) {
   const params = new URLSearchParams();
   params.set("_nkw", query);
-  if (options.anyWords) params.set("_in_kw", "2");
   if (options.category && options.category !== "all") params.set("_sacat", options.category);
   if (options.condition && options.condition !== "all") params.set("LH_ItemCondition", options.condition);
   if (options.minPrice) params.set("_udlo", options.minPrice);
@@ -501,19 +540,19 @@ const TYPO_TYPES = [
   { key: "swapped", label: "Swapped letters", symbol: "<>", desc: "Adjacent letters flipped (cod -> ocd)", defaultOn: true, color: "amber" },
   { key: "doubled", label: "Doubled letter", symbol: "XX", desc: "A letter typed twice (cod -> ccod)", defaultOn: true, color: "olive" },
   { key: "replaced", label: "Neighbor key", symbol: "~", desc: "Adjacent key hit instead (cod -> xod)", defaultOn: true, color: "teal" },
-  { key: "inserted", label: "Extra neighbor", symbol: "+", desc: "Adjacent key added (cod -> xcod)", defaultOn: false, color: "ink" },
-  { key: "phonetic", label: "Phonetic", symbol: "\u03A6", desc: "Sound-alike (c/k, ph/f, alpha/cx)", defaultOn: false, color: "rust" },
+  { key: "inserted", label: "Extra neighbor", symbol: "+", desc: "Adjacent key added (cod -> xcod)", defaultOn: true, color: "ink" },
+  { key: "phonetic", label: "Phonetic", symbol: "\u03A6", desc: "Sound-alike (c/k, ph/f, alpha/cx)", defaultOn: true, color: "rust" },
   { key: "vowel_epen", label: "Vowel epenthesis", symbol: "V+", desc: "Vowel inserted between consonants (tamron -> tamaron)", defaultOn: true, color: "rust" },
   { key: "collapse_doubles", label: "Collapse doubles", symbol: "Xx", desc: "Double letter to single (philippe -> philipe)", defaultOn: true, color: "amber" },
-  { key: "vowel_swap", label: "Vowel swap", symbol: "aei", desc: "Vowel replaced with another (mamiya -> memiya)", defaultOn: false, color: "olive" },
-  { key: "hard_ck", label: "Hard C/K", symbol: "c/k", desc: "Word-start c/k swap, end c/ck (canon -> kanon)", defaultOn: false, color: "teal" },
+  { key: "vowel_swap", label: "Vowel swap", symbol: "aei", desc: "Vowel replaced with another (mamiya -> memiya)", defaultOn: true, color: "olive" },
+  { key: "hard_ck", label: "Hard C/K", symbol: "c/k", desc: "Word-start c/k swap, end c/ck (canon -> kanon)", defaultOn: true, color: "teal" },
   { key: "regional", label: "UK/US spelling", symbol: "UK", desc: "British/American variants (aluminum/aluminium)", defaultOn: true, color: "rust" },
-  { key: "hyphenation", label: "Hyphenation", symbol: "-/", desc: "Hyphens added/removed (iphone -> i-phone)", defaultOn: false, color: "olive" },
-  { key: "plural", label: "Plural +/-s", symbol: "+s", desc: "Trailing s added or removed (photo -> photos)", defaultOn: false, color: "teal" },
-  { key: "ocr", label: "Visual lookalikes", symbol: "rn", desc: "Handwriting/OCR (rn/m, cl/d, vv/w)", defaultOn: false, color: "ink" },
-  { key: "numletter", label: "Number/letter", symbol: "01", desc: "0/o, 1/l, 5/s confusions", defaultOn: false, color: "amber" },
-  { key: "spacing", label: "Spacing", symbol: "_", desc: "Space added or removed", defaultOn: false, color: "olive" },
-  { key: "case", label: "Case", symbol: "Aa", desc: "Different capitalization", defaultOn: false, color: "teal" }
+  { key: "hyphenation", label: "Hyphenation", symbol: "-/", desc: "Hyphens added/removed (iphone -> i-phone)", defaultOn: true, color: "olive" },
+  { key: "plural", label: "Plural +/-s", symbol: "+s", desc: "Trailing s added or removed (photo -> photos)", defaultOn: true, color: "teal" },
+  { key: "ocr", label: "Visual lookalikes", symbol: "rn", desc: "Handwriting/OCR (rn/m, cl/d, vv/w)", defaultOn: true, color: "ink" },
+  { key: "numletter", label: "Number/letter", symbol: "01", desc: "0/o, 1/l, 5/s confusions", defaultOn: true, color: "amber" },
+  { key: "spacing", label: "Spacing", symbol: "_", desc: "Space added or removed", defaultOn: true, color: "olive" },
+  { key: "case", label: "Case", symbol: "Aa", desc: "Different capitalization", defaultOn: true, color: "teal" }
 ];
 const COLOR_MAP = {
   rust: { bg: "#fef2f2", border: "#991b1b", text: "#991b1b" },
@@ -539,6 +578,8 @@ function MisspelledApp() {
   const [excludeCorrectFor, setExcludeCorrectFor] = useState(/* @__PURE__ */ new Set());
   const [excludeStrings, setExcludeStrings] = useState([]);
   const [excludeInput, setExcludeInput] = useState("");
+  const [includeStrings, setIncludeStrings] = useState([]);
+  const [includeInput, setIncludeInput] = useState("");
   const [copiedTerm, setCopiedTerm] = useState(null);
   const [combinedMode, setCombinedMode] = useState("or");
   const [ebayOpts, setEbayOpts] = useState({
@@ -608,6 +649,7 @@ function MisspelledApp() {
     });
   }, [tokens, modes, neighbors, customByGroup]);
   const totalTypos = tokenGroups.reduce((sum, g) => sum + g.typos.length, 0);
+  const effectiveMode = tokenGroups.length <= 1 ? "or" : combinedMode;
   const statsByType = useMemo(() => {
     const s = {};
     tokenGroups.forEach((g) => {
@@ -687,6 +729,15 @@ function MisspelledApp() {
     setExcludeStrings([...excludeStrings, ...fresh]);
   };
   const clearExcludes = () => setExcludeStrings([]);
+  const addIncludeString = () => {
+    const t = includeInput.trim();
+    if (t && !includeStrings.includes(t)) {
+      setIncludeStrings([...includeStrings, t]);
+      setIncludeInput("");
+    }
+  };
+  const removeIncludeString = (t) => setIncludeStrings(includeStrings.filter((x) => x !== t));
+  const clearIncludes = () => setIncludeStrings([]);
   const MAX_QUERY_LEN = 250;
   const MAX_TOTAL_QUERIES = 25;
   const variantsForGroup = (groupIdx) => {
@@ -699,29 +750,58 @@ function MisspelledApp() {
     });
     return [...new Set(variants)];
   };
-  const quoteVariant = (v) => v.includes(" ") ? `"${v}"` : v;
+  const quoteVariant = (v) => /[\s-]/.test(v) ? `"${v}"` : v;
   const formatGroup = (variants) => {
     const quoted = variants.map(quoteVariant);
-    return quoted.length === 1 ? quoted[0] : `(${quoted.join(",")})`;
+    if (quoted.length === 0) return "";
+    if (quoted.length === 1) return `(${quoted[0]},${quoted[0]})`;
+    return `(${quoted.join(",")})`;
+  };
+  const autoExcludedCorrect = () => {
+    const out = [];
+    tokenGroups.forEach((g, i) => {
+      if (g && excludeCorrectFor.has(i) && g.token) out.push(g.token);
+    });
+    return out;
   };
   const buildExcludeSuffix = () => {
     let suffix = "";
-    for (const ex of excludeStrings) {
-      const e = ex.trim();
-      if (!e) continue;
+    const seen = /* @__PURE__ */ new Set();
+    for (const ex of [...autoExcludedCorrect(), ...excludeStrings]) {
+      const e = (ex || "").trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
       suffix += ` -${e.includes(" ") ? `"${e}"` : e}`;
     }
     return suffix;
   };
+  const buildIncludeSuffix = () => {
+    let suffix = "";
+    const seen = /* @__PURE__ */ new Set();
+    for (const inc of includeStrings) {
+      const e = (inc || "").trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
+      suffix += ` ${e.includes(" ") ? `"${e}"` : e}`;
+    }
+    return suffix;
+  };
+  const buildFixedSuffix = () => buildIncludeSuffix() + buildExcludeSuffix();
+  const MAX_PAREN_OR_TERMS = 8;
   const chunkGroupVariants = (variants, budget) => {
-    if (variants.length === 1) return [quoteVariant(variants[0])];
+    if (variants.length === 1) {
+      const q = quoteVariant(variants[0]);
+      return [`(${q},${q})`];
+    }
     const innerBudget = budget - 2;
     const chunks = [];
     let cur = [], curLen = 0;
     for (const v of variants) {
       const vStr = quoteVariant(v);
       const addLen = vStr.length + (cur.length > 0 ? 1 : 0);
-      if (curLen + addLen > innerBudget && cur.length > 0) {
+      const wouldOverflow = curLen + addLen > innerBudget;
+      const wouldExceedTermCap = cur.length >= MAX_PAREN_OR_TERMS;
+      if ((wouldOverflow || wouldExceedTermCap) && cur.length > 0) {
         chunks.push(cur);
         cur = [vStr];
         curLen = vStr.length;
@@ -734,8 +814,9 @@ function MisspelledApp() {
     return chunks.map((c) => c.length === 1 ? c[0] : `(${c.join(",")})`);
   };
   const buildSplitQueries = () => {
-    return combinedMode === "or" ? buildSplitQueriesOr() : buildSplitQueriesAnd();
+    return effectiveMode === "or" ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
+  const MAX_OR_TERMS_PER_GROUP = 8;
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -744,27 +825,28 @@ function MisspelledApp() {
       }
     }
     if (all.length === 0) return { queries: [], truncated: false };
-    const excludeSuffix = buildExcludeSuffix();
+    const fixedSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
-    const oneShot = quoted.join(" ") + excludeSuffix;
-    if (oneShot.length <= MAX_QUERY_LEN) return { queries: [oneShot], truncated: false };
-    const budget = MAX_QUERY_LEN - excludeSuffix.length;
-    const chunks = [];
-    let cur = [], curLen = 0;
-    for (const v of quoted) {
-      const addLen = v.length + (cur.length > 0 ? 1 : 0);
-      if (curLen + addLen > budget && cur.length > 0) {
-        chunks.push(cur);
-        cur = [v];
-        curLen = v.length;
-      } else {
-        cur.push(v);
-        curLen += addLen;
+    const budget = MAX_QUERY_LEN - fixedSuffix.length;
+    const minChunks = Math.ceil(quoted.length / MAX_OR_TERMS_PER_GROUP);
+    const chunks = Array.from({ length: minChunks }, () => []);
+    quoted.forEach((v, i) => chunks[i % minChunks].push(v));
+    const padToTwo = (chunk) => chunk.length === 1 ? [chunk[0], chunk[0]] : chunk;
+    const safeChunks = [];
+    const splitToBudget = (chunk) => {
+      const padded = padToTwo(chunk);
+      const groupStr = `(${padded.join(",")})`;
+      if (groupStr.length <= budget || padded.length <= 2) {
+        safeChunks.push(padded);
+        return;
       }
-    }
-    if (cur.length > 0) chunks.push(cur);
+      const mid = Math.ceil(padded.length / 2);
+      splitToBudget(padded.slice(0, mid));
+      splitToBudget(padded.slice(mid));
+    };
+    chunks.forEach(splitToBudget);
     let truncated = false;
-    let final = chunks.map((c) => c.join(" ") + excludeSuffix);
+    let final = safeChunks.map((c) => `(${c.join(",")})` + fixedSuffix);
     if (final.length > MAX_TOTAL_QUERIES) {
       final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
@@ -778,11 +860,11 @@ function MisspelledApp() {
       if (variants.length > 0) active.push({ idx: i, variants });
     }
     if (active.length === 0) return { queries: [], truncated: false };
-    const excludeSuffix = buildExcludeSuffix();
-    const fullQuery = active.map((g) => formatGroup(g.variants)).join(" ") + excludeSuffix;
+    const fixedSuffix = buildFixedSuffix();
+    const fullQuery = active.map((g) => formatGroup(g.variants)).join(" ") + fixedSuffix;
     if (fullQuery.length <= MAX_QUERY_LEN) return { queries: [fullQuery], truncated: false };
     const interGroupSpaces = Math.max(0, active.length - 1);
-    const totalBudget = MAX_QUERY_LEN - excludeSuffix.length - interGroupSpaces;
+    const totalBudget = MAX_QUERY_LEN - fixedSuffix.length - interGroupSpaces;
     const minBudgets = active.map((g) => Math.max(...g.variants.map((v) => quoteVariant(v).length)) + 2);
     const totalMin = minBudgets.reduce((a, b) => a + b, 0);
     if (totalMin > totalBudget) {
@@ -799,7 +881,7 @@ function MisspelledApp() {
         combos2 = next;
       }
       return {
-        queries: combos2.map((c) => c.join(" ") + excludeSuffix),
+        queries: combos2.map((c) => c.join(" ") + fixedSuffix),
         truncated: natural > MAX_TOTAL_QUERIES
       };
     }
@@ -825,15 +907,15 @@ function MisspelledApp() {
       combos = next;
     }
     return {
-      queries: combos.map((c) => c.join(" ") + excludeSuffix),
+      queries: combos.map((c) => c.join(" ") + fixedSuffix),
       truncated: naturalCartesian > MAX_TOTAL_QUERIES
     };
   };
-  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, combinedMode]);
+  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, includeStrings, effectiveMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(
-    () => combinedQueries.map((q) => buildEbayUrl(q, { ...ebayOpts, anyWords: combinedMode === "or" })),
-    [combinedQueries, ebayOpts, combinedMode]
+    () => combinedQueries.map((q) => buildEbayUrl(q, ebayOpts)),
+    [combinedQueries, ebayOpts, effectiveMode]
   );
   const isSplit = combinedQueries.length > 1;
   const isTruncated = splitResult.truncated;
@@ -841,7 +923,7 @@ function MisspelledApp() {
   const groupsWithVariants = variantsPerGroup.filter((n) => n > 0).length;
   const totalSelectedTypos = selected.size;
   const openTypoSearch = (groupIdx, typoWord) => {
-    window.open(buildEbayUrl(typoWord, ebayOpts), "_blank", "noopener,noreferrer");
+    window.open(buildEbayUrl(`"${typoWord}"`, ebayOpts), "_blank", "noopener,noreferrer");
   };
   const copyToClipboard = async (text, label) => {
     try {
@@ -1077,6 +1159,83 @@ function MisspelledApp() {
     letterSpacing: "0.1em",
     fontFamily: "inherit"
   } }, "ADD"))), /* @__PURE__ */ React.createElement("section", { style: {
+    background: "#fefdf8",
+    border: "2px solid #1c1917",
+    padding: "16px",
+    marginBottom: "20px"
+  } }, /* @__PURE__ */ React.createElement("div", { style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+    marginBottom: "12px",
+    flexWrap: "wrap"
+  } }, /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: {
+    fontSize: "11px",
+    letterSpacing: "0.2em",
+    color: "#57534e",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px"
+  } }, /* @__PURE__ */ React.createElement(Sparkles, { size: 12 }), " REQUIRE IN EVERY SEARCH", /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "4px", color: "#a8a29e", fontWeight: "400", letterSpacing: "0.05em" } }, "(literal term, not misspelled, AND'd to every chunk)")), includeStrings.length > 0 && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: clearIncludes,
+      className: "typewriter",
+      style: {
+        padding: "4px 10px",
+        border: "1.5px solid #b45309",
+        background: "transparent",
+        color: "#b45309",
+        cursor: "pointer",
+        fontSize: "10px",
+        letterSpacing: "0.1em",
+        fontFamily: "'Special Elite', monospace"
+      }
+    },
+    "CLEAR"
+  )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: includeStrings.length ? "12px" : "0" } }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: includeInput,
+      onChange: (e) => setIncludeInput(e.target.value),
+      onKeyDown: (e) => e.key === "Enter" && addIncludeString(),
+      placeholder: "Term to require literally, e.g. 'gfx', 'rb67', '50mm'",
+      className: "mono",
+      style: { flex: 1, padding: "8px 12px", border: "2px solid #1c1917", background: "#fefdf8", fontSize: "14px" }
+    }
+  ), /* @__PURE__ */ React.createElement("button", { onClick: addIncludeString, className: "btn-shadow typewriter", style: {
+    padding: "8px 16px",
+    border: "2px solid #1c1917",
+    background: "#b45309",
+    color: "#fefdf8",
+    cursor: "pointer",
+    fontSize: "13px",
+    letterSpacing: "0.1em",
+    fontFamily: "inherit"
+  } }, "REQUIRE")), includeStrings.length > 0 ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } }, includeStrings.map((t) => /* @__PURE__ */ React.createElement("div", { key: t, className: "mono", style: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "4px 8px",
+    background: "#fef7e6",
+    border: "1.5px solid #b45309",
+    fontSize: "13px",
+    color: "#92400e"
+  } }, /* @__PURE__ */ React.createElement("span", { style: { color: "#b45309", fontWeight: "700" } }, "+"), /* @__PURE__ */ React.createElement("span", null, t), /* @__PURE__ */ React.createElement("button", { onClick: () => removeIncludeString(t), style: {
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    color: "#b45309"
+  } }, /* @__PURE__ */ React.createElement(X, { size: 12 }))))) : /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: {
+    fontSize: "10px",
+    letterSpacing: "0.1em",
+    color: "#a8a29e"
+  } }, "No required terms. Each chunk searches only the typo variants.")), /* @__PURE__ */ React.createElement("section", { style: {
     background: "#fefdf8",
     border: "2px solid #1c1917",
     padding: "16px",
@@ -1350,7 +1509,7 @@ function MisspelledApp() {
     alignItems: "center",
     gap: "8px",
     flexWrap: "wrap"
-  } }, /* @__PURE__ */ React.createElement(Sparkles, { size: 12 }), " COMBINED SEARCH", /* @__PURE__ */ React.createElement("span", { style: { color: "#78716c", fontWeight: "400", letterSpacing: "0.05em" } }, "\xB7 ", groupsWithVariants, "/", tokenGroups.length, " groups active \xB7 ", variantsPerGroup.reduce((a, b) => a + b, 0), " total variants", isSplit && /* @__PURE__ */ React.createElement("span", { style: { color: "#b45309", fontWeight: "700" } }, " \xB7 ", "SPLIT INTO ", combinedQueries.length, " QUERIES")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }), /* @__PURE__ */ React.createElement("div", { style: { display: "inline-flex", border: "1.5px solid #b45309" } }, /* @__PURE__ */ React.createElement(
+  } }, /* @__PURE__ */ React.createElement(Sparkles, { size: 12 }), " COMBINED SEARCH", /* @__PURE__ */ React.createElement("span", { style: { color: "#78716c", fontWeight: "400", letterSpacing: "0.05em" } }, "\xB7 ", groupsWithVariants, "/", tokenGroups.length, " groups active \xB7 ", variantsPerGroup.reduce((a, b) => a + b, 0), " total variants", isSplit && /* @__PURE__ */ React.createElement("span", { style: { color: "#b45309", fontWeight: "700" } }, " \xB7 ", "SPLIT INTO ", combinedQueries.length, " QUERIES")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }), tokenGroups.length > 1 ? /* @__PURE__ */ React.createElement("div", { style: { display: "inline-flex", border: "1.5px solid #b45309" } }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setCombinedMode("or"),
@@ -1363,8 +1522,8 @@ function MisspelledApp() {
         fontSize: "10px",
         letterSpacing: "0.1em",
         fontFamily: "'Special Elite', monospace",
-        background: combinedMode === "or" ? "#b45309" : "transparent",
-        color: combinedMode === "or" ? "#fefdf8" : "#b45309"
+        background: effectiveMode === "or" ? "#b45309" : "transparent",
+        color: effectiveMode === "or" ? "#fefdf8" : "#b45309"
       }
     },
     "OR (ANY)"
@@ -1382,12 +1541,18 @@ function MisspelledApp() {
         fontSize: "10px",
         letterSpacing: "0.1em",
         fontFamily: "'Special Elite', monospace",
-        background: combinedMode === "and" ? "#b45309" : "transparent",
-        color: combinedMode === "and" ? "#fefdf8" : "#b45309"
+        background: effectiveMode === "and" ? "#b45309" : "transparent",
+        color: effectiveMode === "and" ? "#fefdf8" : "#b45309"
       }
     },
     "AND (PER GROUP)"
-  ))), combinedQueries.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "mono", style: {
+  )) : /* @__PURE__ */ React.createElement("span", { className: "typewriter", style: {
+    fontSize: "10px",
+    letterSpacing: "0.1em",
+    color: "#78716c",
+    border: "1.5px solid #d6d3d1",
+    padding: "4px 10px"
+  }, title: "Single-token search: OR is used automatically (cleaner URL, same semantics)." }, "OR (AUTO)")), combinedQueries.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "mono", style: {
     padding: "10px 12px",
     background: "#fef7e6",
     border: "1.5px solid #b45309",
@@ -1538,7 +1703,7 @@ function MisspelledApp() {
     padding: "24px 16px",
     fontSize: "11px",
     color: "#78716c"
-  } }, /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: { letterSpacing: "0.15em", marginBottom: "4px" } }, "EBAY: OR mode uses _in_kw=2 (any words) \xB7 AND mode uses (a,b,c) per group \xB7 -term = exclude \xB7 click a typo card to search that word alone"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "10.5px", fontStyle: "italic" } }, "Sellers who can't spell don't get top dollar. Happy hunting."))));
+  } }, /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: { letterSpacing: "0.15em", marginBottom: "4px" } }, "EBAY: both modes use (a,b,c) paren-OR \xB7 capped at 8 terms per group (eBay's real limit) \xB7 2+ terms per group disables autocorrect \xB7 -term excludes outside the parens"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "10.5px", fontStyle: "italic" } }, "Sellers who can't spell don't get top dollar. Happy hunting."))));
 }
 const selectStyle = {
   width: "100%",
@@ -1616,6 +1781,15 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
+
+
+
+
+
+
+
+
 
 
 
