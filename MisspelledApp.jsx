@@ -734,7 +734,7 @@ export default function MisspelledApp() {
   // Chunk a single group's variants into pieces, each formatted as a complete group string,
   // such that each piece's length stays at or under `budget`.
   // budget is the total budget INCLUDING the parens (if applicable).
-  const MAX_PAREN_OR_TERMS = 14; // eBay caps paren-OR groups at ~14 terms (15+ → null SRP).
+  const MAX_PAREN_OR_TERMS = 8; // eBay paren-OR cap: 8 terms work, 9+ → null SRP. Verified 2026-06-08.
   const chunkGroupVariants = (variants, budget) => {
     if (variants.length === 1) return [quoteVariant(variants[0])];
     const innerBudget = budget - 2; // subtract the two parens chars
@@ -766,10 +766,16 @@ export default function MisspelledApp() {
 
   // OR mode: emit eBay's documented (a,b,c) paren-OR with the exclusion OUTSIDE the parens:
   //   (typo1,typo2,...,typoN) -correct
-  // Hard cap: ~14 variants per paren group. eBay returns a null SRP ("Let's try that again")
-  // for paren-OR groups with 15+ terms -- verified 2026-06-08 by direct testing. We also
-  // enforce the per-query char budget (MAX_QUERY_LEN). A single variant skips the parens.
-  const MAX_OR_TERMS_PER_GROUP = 14;
+  //
+  // Two hard rules verified empirically against live eBay 2026-06-08:
+  //   1. Paren-OR groups cap at 8 terms. 9+ -> null SRP ("Let's try that again").
+  //   2. A SINGLE typo (bare or in (parens) with 1 term) triggers eBay's autocorrect, which
+  //      silently rewrites it to the canonical brand and returns the canonical's listings
+  //      instead of typo-matched ones. 2+ terms in paren-OR disables autocorrect.
+  // So every emitted chunk must have between 2 and MAX_OR_TERMS_PER_GROUP variants. If we
+  // have exactly 1 variant total we duplicate it (`(typo,typo)`) to force paren-OR mode.
+  const MAX_OR_TERMS_PER_GROUP = 8;
+  const MIN_OR_TERMS_PER_GROUP = 2;
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -781,28 +787,33 @@ export default function MisspelledApp() {
 
     const excludeSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
-
-    // Pack into chunks of at most MAX_OR_TERMS_PER_GROUP variants, each fitting MAX_QUERY_LEN.
     const budget = MAX_QUERY_LEN - excludeSuffix.length;
-    const chunks = [];
-    let cur = [], curLen = 2; // start at 2 for the wrapping parens
-    for (const v of quoted) {
-      const addLen = v.length + (cur.length > 0 ? 1 : 0); // +1 for the comma
-      const wouldOverflow = curLen + addLen > budget;
-      const wouldExceedTermCap = cur.length >= MAX_OR_TERMS_PER_GROUP;
-      if ((wouldOverflow || wouldExceedTermCap) && cur.length > 0) {
-        chunks.push(cur);
-        cur = [v];
-        curLen = 2 + v.length;
-      } else {
-        cur.push(v);
-        curLen += addLen;
-      }
+
+    // Decide how many chunks we need, then distribute terms evenly so chunk sizes differ
+    // by at most one. Avoids the failure mode where naive packing leaves a 1-term tail
+    // that hits autocorrect.
+    const minChunks = Math.ceil(quoted.length / MAX_OR_TERMS_PER_GROUP);
+    const chunks = Array.from({ length: minChunks }, () => []);
+    quoted.forEach((v, i) => chunks[i % minChunks].push(v));
+
+    // Edge case: only 1 unique variant. Force paren-OR by duplicating so eBay sees 2 terms
+    // and disables autocorrect. Same listing matches whether we OR a term with itself or not.
+    if (chunks.length === 1 && chunks[0].length === 1) {
+      chunks[0] = [chunks[0][0], chunks[0][0]];
     }
-    if (cur.length > 0) chunks.push(cur);
+
+    // Char-budget safety: if any chunk overflows MAX_QUERY_LEN, split it. Terms are short
+    // (typo brand-words usually 5-15 chars) so this almost never fires below the 8-term cap.
+    const safeChunks = [];
+    for (const chunk of chunks) {
+      const groupStr = `(${chunk.join(',')})`;
+      if (groupStr.length <= budget) { safeChunks.push(chunk); continue; }
+      const mid = Math.ceil(chunk.length / 2);
+      safeChunks.push(chunk.slice(0, mid), chunk.slice(mid));
+    }
 
     let truncated = false;
-    let final = chunks.map(c => (c.length === 1 ? c[0] : `(${c.join(',')})`) + excludeSuffix);
+    let final = safeChunks.map(c => `(${c.join(',')})` + excludeSuffix);
     if (final.length > MAX_TOTAL_QUERIES) {
       final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
@@ -1754,7 +1765,7 @@ export default function MisspelledApp() {
           textAlign: 'center', padding: '24px 16px', fontSize: '11px', color: '#78716c',
         }}>
           <div className="typewriter" style={{ letterSpacing: '0.15em', marginBottom: '4px' }}>
-            EBAY: both modes use (a,b,c) paren-OR · capped at 14 terms per group · -term excludes (outside the parens) · click a typo card to search that word alone
+            EBAY: both modes use (a,b,c) paren-OR · capped at 8 terms per group (eBay's real limit) · 2+ terms per group disables autocorrect · -term excludes outside the parens
           </div>
           <div style={{ fontSize: '10.5px', fontStyle: 'italic' }}>
             Sellers who can't spell don't get top dollar. Happy hunting.

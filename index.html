@@ -45,6 +45,7 @@
 
 
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -782,7 +783,7 @@ function MisspelledApp() {
     return suffix;
   };
   const buildFixedSuffix = () => buildIncludeSuffix() + buildExcludeSuffix();
-  const MAX_PAREN_OR_TERMS = 14;
+  const MAX_PAREN_OR_TERMS = 8;
   const chunkGroupVariants = (variants, budget) => {
     if (variants.length === 1) return [quoteVariant(variants[0])];
     const innerBudget = budget - 2;
@@ -808,7 +809,8 @@ function MisspelledApp() {
   const buildSplitQueries = () => {
     return effectiveMode === "or" ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
-  const MAX_OR_TERMS_PER_GROUP = 14;
+  const MAX_OR_TERMS_PER_GROUP = 8;
+  const MIN_OR_TERMS_PER_GROUP = 2;
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -820,24 +822,24 @@ function MisspelledApp() {
     const excludeSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
     const budget = MAX_QUERY_LEN - excludeSuffix.length;
-    const chunks = [];
-    let cur = [], curLen = 2;
-    for (const v of quoted) {
-      const addLen = v.length + (cur.length > 0 ? 1 : 0);
-      const wouldOverflow = curLen + addLen > budget;
-      const wouldExceedTermCap = cur.length >= MAX_OR_TERMS_PER_GROUP;
-      if ((wouldOverflow || wouldExceedTermCap) && cur.length > 0) {
-        chunks.push(cur);
-        cur = [v];
-        curLen = 2 + v.length;
-      } else {
-        cur.push(v);
-        curLen += addLen;
-      }
+    const minChunks = Math.ceil(quoted.length / MAX_OR_TERMS_PER_GROUP);
+    const chunks = Array.from({ length: minChunks }, () => []);
+    quoted.forEach((v, i) => chunks[i % minChunks].push(v));
+    if (chunks.length === 1 && chunks[0].length === 1) {
+      chunks[0] = [chunks[0][0], chunks[0][0]];
     }
-    if (cur.length > 0) chunks.push(cur);
+    const safeChunks = [];
+    for (const chunk of chunks) {
+      const groupStr = `(${chunk.join(",")})`;
+      if (groupStr.length <= budget) {
+        safeChunks.push(chunk);
+        continue;
+      }
+      const mid = Math.ceil(chunk.length / 2);
+      safeChunks.push(chunk.slice(0, mid), chunk.slice(mid));
+    }
     let truncated = false;
-    let final = chunks.map((c) => (c.length === 1 ? c[0] : `(${c.join(",")})`) + excludeSuffix);
+    let final = safeChunks.map((c) => `(${c.join(",")})` + excludeSuffix);
     if (final.length > MAX_TOTAL_QUERIES) {
       final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
@@ -1694,7 +1696,7 @@ function MisspelledApp() {
     padding: "24px 16px",
     fontSize: "11px",
     color: "#78716c"
-  } }, /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: { letterSpacing: "0.15em", marginBottom: "4px" } }, "EBAY: both modes use (a,b,c) paren-OR \xB7 capped at 14 terms per group \xB7 -term excludes (outside the parens) \xB7 click a typo card to search that word alone"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "10.5px", fontStyle: "italic" } }, "Sellers who can't spell don't get top dollar. Happy hunting."))));
+  } }, /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: { letterSpacing: "0.15em", marginBottom: "4px" } }, "EBAY: both modes use (a,b,c) paren-OR \xB7 capped at 8 terms per group (eBay's real limit) \xB7 2+ terms per group disables autocorrect \xB7 -term excludes outside the parens"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "10.5px", fontStyle: "italic" } }, "Sellers who can't spell don't get top dollar. Happy hunting."))));
 }
 const selectStyle = {
   width: "100%",
@@ -1772,6 +1774,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
 
 
