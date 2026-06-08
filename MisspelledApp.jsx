@@ -402,19 +402,19 @@ const TYPO_TYPES = [
   { key: 'swapped', label: 'Swapped letters', symbol: '<>', desc: 'Adjacent letters flipped (cod -> ocd)', defaultOn: true, color: 'amber' },
   { key: 'doubled', label: 'Doubled letter', symbol: 'XX', desc: 'A letter typed twice (cod -> ccod)', defaultOn: true, color: 'olive' },
   { key: 'replaced', label: 'Neighbor key', symbol: '~', desc: 'Adjacent key hit instead (cod -> xod)', defaultOn: true, color: 'teal' },
-  { key: 'inserted', label: 'Extra neighbor', symbol: '+', desc: 'Adjacent key added (cod -> xcod)', defaultOn: false, color: 'ink' },
-  { key: 'phonetic', label: 'Phonetic', symbol: 'Φ', desc: 'Sound-alike (c/k, ph/f, alpha/cx)', defaultOn: false, color: 'rust' },
+  { key: 'inserted', label: 'Extra neighbor', symbol: '+', desc: 'Adjacent key added (cod -> xcod)', defaultOn: true, color: 'ink' },
+  { key: 'phonetic', label: 'Phonetic', symbol: 'Φ', desc: 'Sound-alike (c/k, ph/f, alpha/cx)', defaultOn: true, color: 'rust' },
   { key: 'vowel_epen', label: 'Vowel epenthesis', symbol: 'V+', desc: 'Vowel inserted between consonants (tamron -> tamaron)', defaultOn: true, color: 'rust' },
   { key: 'collapse_doubles', label: 'Collapse doubles', symbol: 'Xx', desc: 'Double letter to single (philippe -> philipe)', defaultOn: true, color: 'amber' },
-  { key: 'vowel_swap', label: 'Vowel swap', symbol: 'aei', desc: 'Vowel replaced with another (mamiya -> memiya)', defaultOn: false, color: 'olive' },
-  { key: 'hard_ck', label: 'Hard C/K', symbol: 'c/k', desc: 'Word-start c/k swap, end c/ck (canon -> kanon)', defaultOn: false, color: 'teal' },
+  { key: 'vowel_swap', label: 'Vowel swap', symbol: 'aei', desc: 'Vowel replaced with another (mamiya -> memiya)', defaultOn: true, color: 'olive' },
+  { key: 'hard_ck', label: 'Hard C/K', symbol: 'c/k', desc: 'Word-start c/k swap, end c/ck (canon -> kanon)', defaultOn: true, color: 'teal' },
   { key: 'regional', label: 'UK/US spelling', symbol: 'UK', desc: 'British/American variants (aluminum/aluminium)', defaultOn: true, color: 'rust' },
-  { key: 'hyphenation', label: 'Hyphenation', symbol: '-/', desc: 'Hyphens added/removed (iphone -> i-phone)', defaultOn: false, color: 'olive' },
-  { key: 'plural', label: 'Plural +/-s', symbol: '+s', desc: 'Trailing s added or removed (photo -> photos)', defaultOn: false, color: 'teal' },
-  { key: 'ocr', label: 'Visual lookalikes', symbol: 'rn', desc: 'Handwriting/OCR (rn/m, cl/d, vv/w)', defaultOn: false, color: 'ink' },
-  { key: 'numletter', label: 'Number/letter', symbol: '01', desc: '0/o, 1/l, 5/s confusions', defaultOn: false, color: 'amber' },
-  { key: 'spacing', label: 'Spacing', symbol: '_', desc: 'Space added or removed', defaultOn: false, color: 'olive' },
-  { key: 'case', label: 'Case', symbol: 'Aa', desc: 'Different capitalization', defaultOn: false, color: 'teal' },
+  { key: 'hyphenation', label: 'Hyphenation', symbol: '-/', desc: 'Hyphens added/removed (iphone -> i-phone)', defaultOn: true, color: 'olive' },
+  { key: 'plural', label: 'Plural +/-s', symbol: '+s', desc: 'Trailing s added or removed (photo -> photos)', defaultOn: true, color: 'teal' },
+  { key: 'ocr', label: 'Visual lookalikes', symbol: 'rn', desc: 'Handwriting/OCR (rn/m, cl/d, vv/w)', defaultOn: true, color: 'ink' },
+  { key: 'numletter', label: 'Number/letter', symbol: '01', desc: '0/o, 1/l, 5/s confusions', defaultOn: true, color: 'amber' },
+  { key: 'spacing', label: 'Spacing', symbol: '_', desc: 'Space added or removed', defaultOn: true, color: 'olive' },
+  { key: 'case', label: 'Case', symbol: 'Aa', desc: 'Different capitalization', defaultOn: true, color: 'teal' },
 ];
 
 const COLOR_MAP = {
@@ -538,6 +538,11 @@ export default function MisspelledApp() {
   }, [tokens, modes, neighbors, customByGroup]);
 
   const totalTypos = tokenGroups.reduce((sum, g) => sum + g.typos.length, 0);
+
+  // Effective combined-search mode: with only one token group, AND and OR are semantically
+  // identical (no per-group ANDing happens) -- but OR produces a cleaner flat URL with no
+  // parens. Force OR in that case so the toggle's choice is irrelevant and the URL is simpler.
+  const effectiveMode = tokenGroups.length <= 1 ? 'or' : combinedMode;
 
   // Stats by type (across all groups)
   const statsByType = useMemo(() => {
@@ -704,7 +709,7 @@ export default function MisspelledApp() {
   // Split the combined query into 1+ sub-queries that each fit under MAX_QUERY_LEN.
   // Returns { queries, truncated }. Branches on combinedMode.
   const buildSplitQueries = () => {
-    return combinedMode === 'or' ? buildSplitQueriesOr() : buildSplitQueriesAnd();
+    return effectiveMode === 'or' ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
 
   // OR mode: flatten all variants into a space-separated list and rely on
@@ -826,11 +831,11 @@ export default function MisspelledApp() {
     };
   };
 
-  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, combinedMode]);
+  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, effectiveMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(
-    () => combinedQueries.map(q => buildEbayUrl(q, { ...ebayOpts, anyWords: combinedMode === 'or' })),
-    [combinedQueries, ebayOpts, combinedMode]
+    () => combinedQueries.map(q => buildEbayUrl(q, { ...ebayOpts, anyWords: effectiveMode === 'or' })),
+    [combinedQueries, ebayOpts, effectiveMode]
   );
   const isSplit = combinedQueries.length > 1;
   const isTruncated = splitResult.truncated;
@@ -1420,36 +1425,45 @@ export default function MisspelledApp() {
                 )}
               </span>
               <div style={{ flex: 1 }} />
-              <div style={{ display: 'inline-flex', border: '1.5px solid #b45309' }}>
-                <button
-                  onClick={() => setCombinedMode('or')}
-                  className="typewriter"
-                  title="ANY variant matches. Listing only needs one of (mamiya, amiya, rb67). Best for typo hunting."
-                  style={{
-                    padding: '4px 10px', border: 'none', cursor: 'pointer',
-                    fontSize: '10px', letterSpacing: '0.1em',
-                    fontFamily: "'Special Elite', monospace",
-                    background: combinedMode === 'or' ? '#b45309' : 'transparent',
-                    color: combinedMode === 'or' ? '#fefdf8' : '#b45309',
-                  }}
-                >
-                  OR (ANY)
-                </button>
-                <button
-                  onClick={() => setCombinedMode('and')}
-                  className="typewriter"
-                  title="One variant per group must match. (mamiya OR amiya) AND (rb67 OR rb6t). Strict normal-search behavior."
-                  style={{
-                    padding: '4px 10px', border: 'none', borderLeft: '1.5px solid #b45309',
-                    cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em',
-                    fontFamily: "'Special Elite', monospace",
-                    background: combinedMode === 'and' ? '#b45309' : 'transparent',
-                    color: combinedMode === 'and' ? '#fefdf8' : '#b45309',
-                  }}
-                >
-                  AND (PER GROUP)
-                </button>
-              </div>
+              {tokenGroups.length > 1 ? (
+                <div style={{ display: 'inline-flex', border: '1.5px solid #b45309' }}>
+                  <button
+                    onClick={() => setCombinedMode('or')}
+                    className="typewriter"
+                    title="ANY variant matches. Listing only needs one of (mamiya, amiya, rb67). Best for typo hunting."
+                    style={{
+                      padding: '4px 10px', border: 'none', cursor: 'pointer',
+                      fontSize: '10px', letterSpacing: '0.1em',
+                      fontFamily: "'Special Elite', monospace",
+                      background: effectiveMode === 'or' ? '#b45309' : 'transparent',
+                      color: effectiveMode === 'or' ? '#fefdf8' : '#b45309',
+                    }}
+                  >
+                    OR (ANY)
+                  </button>
+                  <button
+                    onClick={() => setCombinedMode('and')}
+                    className="typewriter"
+                    title="One variant per group must match. (mamiya OR amiya) AND (rb67 OR rb6t). Strict normal-search behavior."
+                    style={{
+                      padding: '4px 10px', border: 'none', borderLeft: '1.5px solid #b45309',
+                      cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em',
+                      fontFamily: "'Special Elite', monospace",
+                      background: effectiveMode === 'and' ? '#b45309' : 'transparent',
+                      color: effectiveMode === 'and' ? '#fefdf8' : '#b45309',
+                    }}
+                  >
+                    AND (PER GROUP)
+                  </button>
+                </div>
+              ) : (
+                <span className="typewriter" style={{
+                  fontSize: '10px', letterSpacing: '0.1em', color: '#78716c',
+                  border: '1.5px solid #d6d3d1', padding: '4px 10px',
+                }} title="Single-token search: OR is used automatically (cleaner URL, same semantics).">
+                  OR (AUTO)
+                </span>
+              )}
             </div>
 
             {combinedQueries.length === 0 ? (

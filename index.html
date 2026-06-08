@@ -41,6 +41,7 @@
 
 
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -503,19 +504,19 @@ const TYPO_TYPES = [
   { key: "swapped", label: "Swapped letters", symbol: "<>", desc: "Adjacent letters flipped (cod -> ocd)", defaultOn: true, color: "amber" },
   { key: "doubled", label: "Doubled letter", symbol: "XX", desc: "A letter typed twice (cod -> ccod)", defaultOn: true, color: "olive" },
   { key: "replaced", label: "Neighbor key", symbol: "~", desc: "Adjacent key hit instead (cod -> xod)", defaultOn: true, color: "teal" },
-  { key: "inserted", label: "Extra neighbor", symbol: "+", desc: "Adjacent key added (cod -> xcod)", defaultOn: false, color: "ink" },
-  { key: "phonetic", label: "Phonetic", symbol: "\u03A6", desc: "Sound-alike (c/k, ph/f, alpha/cx)", defaultOn: false, color: "rust" },
+  { key: "inserted", label: "Extra neighbor", symbol: "+", desc: "Adjacent key added (cod -> xcod)", defaultOn: true, color: "ink" },
+  { key: "phonetic", label: "Phonetic", symbol: "\u03A6", desc: "Sound-alike (c/k, ph/f, alpha/cx)", defaultOn: true, color: "rust" },
   { key: "vowel_epen", label: "Vowel epenthesis", symbol: "V+", desc: "Vowel inserted between consonants (tamron -> tamaron)", defaultOn: true, color: "rust" },
   { key: "collapse_doubles", label: "Collapse doubles", symbol: "Xx", desc: "Double letter to single (philippe -> philipe)", defaultOn: true, color: "amber" },
-  { key: "vowel_swap", label: "Vowel swap", symbol: "aei", desc: "Vowel replaced with another (mamiya -> memiya)", defaultOn: false, color: "olive" },
-  { key: "hard_ck", label: "Hard C/K", symbol: "c/k", desc: "Word-start c/k swap, end c/ck (canon -> kanon)", defaultOn: false, color: "teal" },
+  { key: "vowel_swap", label: "Vowel swap", symbol: "aei", desc: "Vowel replaced with another (mamiya -> memiya)", defaultOn: true, color: "olive" },
+  { key: "hard_ck", label: "Hard C/K", symbol: "c/k", desc: "Word-start c/k swap, end c/ck (canon -> kanon)", defaultOn: true, color: "teal" },
   { key: "regional", label: "UK/US spelling", symbol: "UK", desc: "British/American variants (aluminum/aluminium)", defaultOn: true, color: "rust" },
-  { key: "hyphenation", label: "Hyphenation", symbol: "-/", desc: "Hyphens added/removed (iphone -> i-phone)", defaultOn: false, color: "olive" },
-  { key: "plural", label: "Plural +/-s", symbol: "+s", desc: "Trailing s added or removed (photo -> photos)", defaultOn: false, color: "teal" },
-  { key: "ocr", label: "Visual lookalikes", symbol: "rn", desc: "Handwriting/OCR (rn/m, cl/d, vv/w)", defaultOn: false, color: "ink" },
-  { key: "numletter", label: "Number/letter", symbol: "01", desc: "0/o, 1/l, 5/s confusions", defaultOn: false, color: "amber" },
-  { key: "spacing", label: "Spacing", symbol: "_", desc: "Space added or removed", defaultOn: false, color: "olive" },
-  { key: "case", label: "Case", symbol: "Aa", desc: "Different capitalization", defaultOn: false, color: "teal" }
+  { key: "hyphenation", label: "Hyphenation", symbol: "-/", desc: "Hyphens added/removed (iphone -> i-phone)", defaultOn: true, color: "olive" },
+  { key: "plural", label: "Plural +/-s", symbol: "+s", desc: "Trailing s added or removed (photo -> photos)", defaultOn: true, color: "teal" },
+  { key: "ocr", label: "Visual lookalikes", symbol: "rn", desc: "Handwriting/OCR (rn/m, cl/d, vv/w)", defaultOn: true, color: "ink" },
+  { key: "numletter", label: "Number/letter", symbol: "01", desc: "0/o, 1/l, 5/s confusions", defaultOn: true, color: "amber" },
+  { key: "spacing", label: "Spacing", symbol: "_", desc: "Space added or removed", defaultOn: true, color: "olive" },
+  { key: "case", label: "Case", symbol: "Aa", desc: "Different capitalization", defaultOn: true, color: "teal" }
 ];
 const COLOR_MAP = {
   rust: { bg: "#fef2f2", border: "#991b1b", text: "#991b1b" },
@@ -610,6 +611,7 @@ function MisspelledApp() {
     });
   }, [tokens, modes, neighbors, customByGroup]);
   const totalTypos = tokenGroups.reduce((sum, g) => sum + g.typos.length, 0);
+  const effectiveMode = tokenGroups.length <= 1 ? "or" : combinedMode;
   const statsByType = useMemo(() => {
     const s = {};
     tokenGroups.forEach((g) => {
@@ -745,7 +747,7 @@ function MisspelledApp() {
     return chunks.map((c) => c.length === 1 ? c[0] : `(${c.join(",")})`);
   };
   const buildSplitQueries = () => {
-    return combinedMode === "or" ? buildSplitQueriesOr() : buildSplitQueriesAnd();
+    return effectiveMode === "or" ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
   const buildSplitQueriesOr = () => {
     const all = [];
@@ -840,11 +842,11 @@ function MisspelledApp() {
       truncated: naturalCartesian > MAX_TOTAL_QUERIES
     };
   };
-  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, combinedMode]);
+  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, effectiveMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(
-    () => combinedQueries.map((q) => buildEbayUrl(q, { ...ebayOpts, anyWords: combinedMode === "or" })),
-    [combinedQueries, ebayOpts, combinedMode]
+    () => combinedQueries.map((q) => buildEbayUrl(q, { ...ebayOpts, anyWords: effectiveMode === "or" })),
+    [combinedQueries, ebayOpts, effectiveMode]
   );
   const isSplit = combinedQueries.length > 1;
   const isTruncated = splitResult.truncated;
@@ -1361,7 +1363,7 @@ function MisspelledApp() {
     alignItems: "center",
     gap: "8px",
     flexWrap: "wrap"
-  } }, /* @__PURE__ */ React.createElement(Sparkles, { size: 12 }), " COMBINED SEARCH", /* @__PURE__ */ React.createElement("span", { style: { color: "#78716c", fontWeight: "400", letterSpacing: "0.05em" } }, "\xB7 ", groupsWithVariants, "/", tokenGroups.length, " groups active \xB7 ", variantsPerGroup.reduce((a, b) => a + b, 0), " total variants", isSplit && /* @__PURE__ */ React.createElement("span", { style: { color: "#b45309", fontWeight: "700" } }, " \xB7 ", "SPLIT INTO ", combinedQueries.length, " QUERIES")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }), /* @__PURE__ */ React.createElement("div", { style: { display: "inline-flex", border: "1.5px solid #b45309" } }, /* @__PURE__ */ React.createElement(
+  } }, /* @__PURE__ */ React.createElement(Sparkles, { size: 12 }), " COMBINED SEARCH", /* @__PURE__ */ React.createElement("span", { style: { color: "#78716c", fontWeight: "400", letterSpacing: "0.05em" } }, "\xB7 ", groupsWithVariants, "/", tokenGroups.length, " groups active \xB7 ", variantsPerGroup.reduce((a, b) => a + b, 0), " total variants", isSplit && /* @__PURE__ */ React.createElement("span", { style: { color: "#b45309", fontWeight: "700" } }, " \xB7 ", "SPLIT INTO ", combinedQueries.length, " QUERIES")), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }), tokenGroups.length > 1 ? /* @__PURE__ */ React.createElement("div", { style: { display: "inline-flex", border: "1.5px solid #b45309" } }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setCombinedMode("or"),
@@ -1374,8 +1376,8 @@ function MisspelledApp() {
         fontSize: "10px",
         letterSpacing: "0.1em",
         fontFamily: "'Special Elite', monospace",
-        background: combinedMode === "or" ? "#b45309" : "transparent",
-        color: combinedMode === "or" ? "#fefdf8" : "#b45309"
+        background: effectiveMode === "or" ? "#b45309" : "transparent",
+        color: effectiveMode === "or" ? "#fefdf8" : "#b45309"
       }
     },
     "OR (ANY)"
@@ -1393,12 +1395,18 @@ function MisspelledApp() {
         fontSize: "10px",
         letterSpacing: "0.1em",
         fontFamily: "'Special Elite', monospace",
-        background: combinedMode === "and" ? "#b45309" : "transparent",
-        color: combinedMode === "and" ? "#fefdf8" : "#b45309"
+        background: effectiveMode === "and" ? "#b45309" : "transparent",
+        color: effectiveMode === "and" ? "#fefdf8" : "#b45309"
       }
     },
     "AND (PER GROUP)"
-  ))), combinedQueries.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "mono", style: {
+  )) : /* @__PURE__ */ React.createElement("span", { className: "typewriter", style: {
+    fontSize: "10px",
+    letterSpacing: "0.1em",
+    color: "#78716c",
+    border: "1.5px solid #d6d3d1",
+    padding: "4px 10px"
+  }, title: "Single-token search: OR is used automatically (cleaner URL, same semantics)." }, "OR (AUTO)")), combinedQueries.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "mono", style: {
     padding: "10px 12px",
     background: "#fef7e6",
     border: "1.5px solid #b45309",
@@ -1627,6 +1635,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
 
 
