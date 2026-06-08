@@ -112,6 +112,17 @@ function generatePhonetic(word) {
     ['tion','sion'],['sion','tion'],
     // Greek-letter glyph/spelling confusions (e.g. Sony Alpha listings written as α / a / cx)
     ['alpha','cx'],['cx','alpha'],['alpha','a'],
+    // 10 cross-language phoneme confusions common in eBay brand misspellings:
+    ['j','g'],['g','j'],          // soft-g (fujifilm <-> fugifilm)
+    ['j','y'],['y','j'],          // Spanish/Slavic (yamaha <-> jamaha)
+    ['w','v'],['v','w'],          // German consonant (voigtlander <-> woigtlander)
+    ['v','b'],['b','v'],          // Spanish b/v collapse (vivitar <-> bibitar)
+    ['sch','sh'],['sh','sch'],    // German digraph (schneider <-> shneider)
+    ['ch','k'],['k','ch'],        // German hard-ch (bach <-> bak)
+    ['ks','x'],['x','ks'],        // pentax <-> pentaks
+    ['qu','kw'],['kw','qu'],      // quasar <-> kwasar
+    ['dt','t'],['t','dt'],        // German final-cluster collapse (schmidt <-> schmit)
+    ['th','t'],['t','th'],        // English speakers drop the 'h'
   ];
   const lower = word.toLowerCase();
   for (const [from, to] of subs) {
