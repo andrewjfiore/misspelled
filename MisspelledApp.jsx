@@ -643,7 +643,11 @@ export default function MisspelledApp() {
     return [...new Set(variants)];
   };
 
-  const quoteVariant = (v) => v.includes(' ') ? `"${v}"` : v;
+  // Wrap in quotes when the variant contains a space (spacing typos) OR a hyphen
+  // (hyphenation typos). Without quoting, eBay's tokenizer splits on '-' and treats
+  // anything after a leading '-' as an exclusion -- so a typo like 'mam-iya' would be
+  // parsed as "include mam, EXCLUDE iya", silently filtering out matching listings.
+  const quoteVariant = (v) => /[\s-]/.test(v) ? `"${v}"` : v;
   const formatGroup = (variants) => {
     const quoted = variants.map(quoteVariant);
     return quoted.length === 1 ? quoted[0] : `(${quoted.join(',')})`;

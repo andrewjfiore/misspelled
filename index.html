@@ -40,6 +40,7 @@
 
 
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -700,7 +701,7 @@ function MisspelledApp() {
     });
     return [...new Set(variants)];
   };
-  const quoteVariant = (v) => v.includes(" ") ? `"${v}"` : v;
+  const quoteVariant = (v) => /[\s-]/.test(v) ? `"${v}"` : v;
   const formatGroup = (variants) => {
     const quoted = variants.map(quoteVariant);
     return quoted.length === 1 ? quoted[0] : `(${quoted.join(",")})`;
@@ -1626,6 +1627,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
 
 
