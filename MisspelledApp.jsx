@@ -377,10 +377,11 @@ const SORT_OPTIONS = [
 function buildEbayUrl(query, options) {
   const params = new URLSearchParams();
   params.set('_nkw', query);
-  // _in_kw=2 = eBay's "Any words, any order" mode. Use this for OR queries because
-  // the (a,b,c) paren-OR syntax silently returns 0 results on long term lists -- eBay
-  // treats the parens and commas as literal characters in the search string.
-  if (options.anyWords) params.set('_in_kw', '2');
+  // Do NOT use _in_kw=2 ("any words, any order") -- eBay Boolean-rewrites the term list and
+  // pulls a trailing `-foo` exclusion *inside* the rewritten paren-OR group, treating it as
+  // a literal OR'd keyword. The exclusion is silently lost and the query matches everything.
+  // Verified 2026-06-08 via direct eBay testing. Use the default _in_kw (omit it) with the
+  // documented (a,b,c) -excl grammar instead. See eBay Developers KB 2190.
   if (options.category && options.category !== 'all') params.set('_sacat', options.category);
   if (options.condition && options.condition !== 'all') params.set('LH_ItemCondition', options.condition);
   if (options.minPrice) params.set('_udlo', options.minPrice);
@@ -685,6 +686,7 @@ export default function MisspelledApp() {
   // Chunk a single group's variants into pieces, each formatted as a complete group string,
   // such that each piece's length stays at or under `budget`.
   // budget is the total budget INCLUDING the parens (if applicable).
+  const MAX_PAREN_OR_TERMS = 14; // eBay caps paren-OR groups at ~14 terms (15+ → null SRP).
   const chunkGroupVariants = (variants, budget) => {
     if (variants.length === 1) return [quoteVariant(variants[0])];
     const innerBudget = budget - 2; // subtract the two parens chars
@@ -693,7 +695,9 @@ export default function MisspelledApp() {
     for (const v of variants) {
       const vStr = quoteVariant(v);
       const addLen = vStr.length + (cur.length > 0 ? 1 : 0); // +1 for comma when not first
-      if (curLen + addLen > innerBudget && cur.length > 0) {
+      const wouldOverflow = curLen + addLen > innerBudget;
+      const wouldExceedTermCap = cur.length >= MAX_PAREN_OR_TERMS;
+      if ((wouldOverflow || wouldExceedTermCap) && cur.length > 0) {
         chunks.push(cur);
         cur = [vStr];
         curLen = vStr.length;
@@ -712,10 +716,12 @@ export default function MisspelledApp() {
     return effectiveMode === 'or' ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
 
-  // OR mode: flatten all variants into a space-separated list and rely on
-  // eBay's _in_kw=2 ("Any words, any order") to OR them. The (a,b,c) paren syntax
-  // silently fails on long term lists -- eBay treats the parens/commas as literal
-  // chars in the search string. _in_kw=2 is the documented advanced-search mode.
+  // OR mode: emit eBay's documented (a,b,c) paren-OR with the exclusion OUTSIDE the parens:
+  //   (typo1,typo2,...,typoN) -correct
+  // Hard cap: ~14 variants per paren group. eBay returns a null SRP ("Let's try that again")
+  // for paren-OR groups with 15+ terms -- verified 2026-06-08 by direct testing. We also
+  // enforce the per-query char budget (MAX_QUERY_LEN). A single variant skips the parens.
+  const MAX_OR_TERMS_PER_GROUP = 14;
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -727,19 +733,19 @@ export default function MisspelledApp() {
 
     const excludeSuffix = buildExcludeSuffix();
     const quoted = all.map(quoteVariant);
-    const oneShot = quoted.join(' ') + excludeSuffix;
-    if (oneShot.length <= MAX_QUERY_LEN) return { queries: [oneShot], truncated: false };
 
-    // Chunk space-separated terms (no paren overhead).
+    // Pack into chunks of at most MAX_OR_TERMS_PER_GROUP variants, each fitting MAX_QUERY_LEN.
     const budget = MAX_QUERY_LEN - excludeSuffix.length;
     const chunks = [];
-    let cur = [], curLen = 0;
+    let cur = [], curLen = 2; // start at 2 for the wrapping parens
     for (const v of quoted) {
-      const addLen = v.length + (cur.length > 0 ? 1 : 0);
-      if (curLen + addLen > budget && cur.length > 0) {
+      const addLen = v.length + (cur.length > 0 ? 1 : 0); // +1 for the comma
+      const wouldOverflow = curLen + addLen > budget;
+      const wouldExceedTermCap = cur.length >= MAX_OR_TERMS_PER_GROUP;
+      if ((wouldOverflow || wouldExceedTermCap) && cur.length > 0) {
         chunks.push(cur);
         cur = [v];
-        curLen = v.length;
+        curLen = 2 + v.length;
       } else {
         cur.push(v);
         curLen += addLen;
@@ -748,7 +754,7 @@ export default function MisspelledApp() {
     if (cur.length > 0) chunks.push(cur);
 
     let truncated = false;
-    let final = chunks.map(c => c.join(' ') + excludeSuffix);
+    let final = chunks.map(c => (c.length === 1 ? c[0] : `(${c.join(',')})`) + excludeSuffix);
     if (final.length > MAX_TOTAL_QUERIES) {
       final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
@@ -834,7 +840,7 @@ export default function MisspelledApp() {
   const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, effectiveMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(
-    () => combinedQueries.map(q => buildEbayUrl(q, { ...ebayOpts, anyWords: effectiveMode === 'or' })),
+    () => combinedQueries.map(q => buildEbayUrl(q, ebayOpts)),
     [combinedQueries, ebayOpts, effectiveMode]
   );
   const isSplit = combinedQueries.length > 1;
@@ -1623,7 +1629,7 @@ export default function MisspelledApp() {
           textAlign: 'center', padding: '24px 16px', fontSize: '11px', color: '#78716c',
         }}>
           <div className="typewriter" style={{ letterSpacing: '0.15em', marginBottom: '4px' }}>
-            EBAY: OR mode uses _in_kw=2 (any words) · AND mode uses (a,b,c) per group · -term = exclude · click a typo card to search that word alone
+            EBAY: both modes use (a,b,c) paren-OR · capped at 14 terms per group · -term excludes (outside the parens) · click a typo card to search that word alone
           </div>
           <div style={{ fontSize: '10.5px', fontStyle: 'italic' }}>
             Sellers who can't spell don't get top dollar. Happy hunting.
