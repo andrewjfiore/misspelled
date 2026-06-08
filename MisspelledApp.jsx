@@ -649,11 +649,25 @@ export default function MisspelledApp() {
     return quoted.length === 1 ? quoted[0] : `(${quoted.join(',')})`;
   };
 
+  // Correct tokens whose group is toggled "exclude correct" — these get auto-appended
+  // as -correct exclusions OUTSIDE the parens so eBay actually filters out the correctly
+  // spelled listings (otherwise dropping them from the variant list just makes the search
+  // not require them, which doesn't exclude anything).
+  const autoExcludedCorrect = () => {
+    const out = [];
+    tokenGroups.forEach((g, i) => {
+      if (g && excludeCorrectFor.has(i) && g.token) out.push(g.token);
+    });
+    return out;
+  };
+
   const buildExcludeSuffix = () => {
     let suffix = '';
-    for (const ex of excludeStrings) {
-      const e = ex.trim();
-      if (!e) continue;
+    const seen = new Set();
+    for (const ex of [...autoExcludedCorrect(), ...excludeStrings]) {
+      const e = (ex || '').trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
       suffix += ` -${e.includes(' ') ? `"${e}"` : e}`;
     }
     return suffix;

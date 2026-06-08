@@ -39,6 +39,7 @@
 
 
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -704,11 +705,20 @@ function MisspelledApp() {
     const quoted = variants.map(quoteVariant);
     return quoted.length === 1 ? quoted[0] : `(${quoted.join(",")})`;
   };
+  const autoExcludedCorrect = () => {
+    const out = [];
+    tokenGroups.forEach((g, i) => {
+      if (g && excludeCorrectFor.has(i) && g.token) out.push(g.token);
+    });
+    return out;
+  };
   const buildExcludeSuffix = () => {
     let suffix = "";
-    for (const ex of excludeStrings) {
-      const e = ex.trim();
-      if (!e) continue;
+    const seen = /* @__PURE__ */ new Set();
+    for (const ex of [...autoExcludedCorrect(), ...excludeStrings]) {
+      const e = (ex || "").trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
       suffix += ` -${e.includes(" ") ? `"${e}"` : e}`;
     }
     return suffix;
@@ -1616,6 +1626,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
 
 
