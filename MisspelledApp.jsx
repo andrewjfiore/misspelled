@@ -454,6 +454,13 @@ export default function MisspelledApp() {
   const [excludeStrings, setExcludeStrings] = useState([]);
   const [excludeInput, setExcludeInput] = useState('');
 
+  // Free-form INCLUDE list: terms appended verbatim (not misspelled) to every generated
+  // sub-query. eBay AND-joins them with the typo group. Use case: brand+model where only
+  // the brand should be misspelled and the model number must appear literally
+  // (e.g. word="fujifilm", include="gfx" -> (fujfilm,fujifim,...) gfx).
+  const [includeStrings, setIncludeStrings] = useState([]);
+  const [includeInput, setIncludeInput] = useState('');
+
   const [copiedTerm, setCopiedTerm] = useState(null);
 
   // Combined-search mode. 'and' = per-group ORs joined by space (eBay AND across groups):
@@ -630,6 +637,17 @@ export default function MisspelledApp() {
   };
   const clearExcludes = () => setExcludeStrings([]);
 
+  // ===== Include string handlers =====
+  const addIncludeString = () => {
+    const t = includeInput.trim();
+    if (t && !includeStrings.includes(t)) {
+      setIncludeStrings([...includeStrings, t]);
+      setIncludeInput('');
+    }
+  };
+  const removeIncludeString = (t) => setIncludeStrings(includeStrings.filter(x => x !== t));
+  const clearIncludes = () => setIncludeStrings([]);
+
   // ===== Query building =====
   // eBay truncates _nkw beyond ~300 chars. Keep some headroom for URL encoding.
   const MAX_QUERY_LEN = 250;
@@ -683,6 +701,25 @@ export default function MisspelledApp() {
     return suffix;
   };
 
+  // Required literal terms, appended verbatim to every chunk's query. eBay AND-joins them
+  // with the typo paren-OR group: `(typo1,typo2,...) gfx -broken` matches listings that
+  // contain any typo AND the literal word "gfx" AND do not contain "broken".
+  const buildIncludeSuffix = () => {
+    let suffix = '';
+    const seen = new Set();
+    for (const inc of includeStrings) {
+      const e = (inc || '').trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
+      suffix += ` ${e.includes(' ') ? `"${e}"` : e}`;
+    }
+    return suffix;
+  };
+
+  // Combined trailing suffix that every chunk gets: required terms first, then exclusions.
+  // Order is cosmetic (eBay grammar doesn't care) but makes the URL easier to read.
+  const buildFixedSuffix = () => buildIncludeSuffix() + buildExcludeSuffix();
+
   // Chunk a single group's variants into pieces, each formatted as a complete group string,
   // such that each piece's length stays at or under `budget`.
   // budget is the total budget INCLUDING the parens (if applicable).
@@ -731,7 +768,7 @@ export default function MisspelledApp() {
     }
     if (all.length === 0) return { queries: [], truncated: false };
 
-    const excludeSuffix = buildExcludeSuffix();
+    const excludeSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
 
     // Pack into chunks of at most MAX_OR_TERMS_PER_GROUP variants, each fitting MAX_QUERY_LEN.
@@ -776,7 +813,7 @@ export default function MisspelledApp() {
     }
     if (active.length === 0) return { queries: [], truncated: false };
 
-    const excludeSuffix = buildExcludeSuffix();
+    const excludeSuffix = buildFixedSuffix();
     const fullQuery = active.map(g => formatGroup(g.variants)).join(' ') + excludeSuffix;
     if (fullQuery.length <= MAX_QUERY_LEN) return { queries: [fullQuery], truncated: false };
 
@@ -837,7 +874,7 @@ export default function MisspelledApp() {
     };
   };
 
-  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, effectiveMode]);
+  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, includeStrings, effectiveMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(
     () => combinedQueries.map(q => buildEbayUrl(q, ebayOpts)),
@@ -1134,6 +1171,83 @@ export default function MisspelledApp() {
             </div>
           </section>
         )}
+
+        {/* ===== INCLUDE STRINGS ===== */}
+        <section style={{
+          background: '#fefdf8', border: '2px solid #1c1917', padding: '16px', marginBottom: '20px',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '8px', marginBottom: '12px', flexWrap: 'wrap',
+          }}>
+            <div className="typewriter" style={{
+              fontSize: '11px', letterSpacing: '0.2em', color: '#57534e',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <Sparkles size={12} /> REQUIRE IN EVERY SEARCH
+              <span style={{ marginLeft: '4px', color: '#a8a29e', fontWeight: '400', letterSpacing: '0.05em' }}>
+                (literal term, not misspelled, AND'd to every chunk)
+              </span>
+            </div>
+            {includeStrings.length > 0 && (
+              <button
+                onClick={clearIncludes}
+                className="typewriter"
+                style={{
+                  padding: '4px 10px', border: '1.5px solid #b45309', background: 'transparent',
+                  color: '#b45309', cursor: 'pointer', fontSize: '10px', letterSpacing: '0.1em',
+                  fontFamily: "'Special Elite', monospace",
+                }}
+              >
+                CLEAR
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', marginBottom: includeStrings.length ? '12px' : '0' }}>
+            <input
+              type="text"
+              value={includeInput}
+              onChange={e => setIncludeInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addIncludeString()}
+              placeholder="Term to require literally, e.g. 'gfx', 'rb67', '50mm'"
+              className="mono"
+              style={{ flex: 1, padding: '8px 12px', border: '2px solid #1c1917', background: '#fefdf8', fontSize: '14px' }}
+            />
+            <button onClick={addIncludeString} className="btn-shadow typewriter" style={{
+              padding: '8px 16px', border: '2px solid #1c1917', background: '#b45309',
+              color: '#fefdf8', cursor: 'pointer', fontSize: '13px', letterSpacing: '0.1em', fontFamily: 'inherit',
+            }}>
+              REQUIRE
+            </button>
+          </div>
+          {includeStrings.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {includeStrings.map(t => (
+                <div key={t} className="mono" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '4px 8px', background: '#fef7e6', border: '1.5px solid #b45309',
+                  fontSize: '13px', color: '#92400e',
+                }}>
+                  <span style={{ color: '#b45309', fontWeight: '700' }}>{'+'}</span>
+                  <span>{t}</span>
+                  <button onClick={() => removeIncludeString(t)} style={{
+                    border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+                    display: 'flex', alignItems: 'center', color: '#b45309',
+                  }}>
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="typewriter" style={{
+              fontSize: '10px', letterSpacing: '0.1em', color: '#a8a29e',
+            }}>
+              No required terms. Each chunk searches only the typo variants.
+            </div>
+          )}
+        </section>
 
         {/* ===== EXCLUDE STRINGS ===== */}
         <section style={{

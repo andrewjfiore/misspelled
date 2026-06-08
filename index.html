@@ -43,6 +43,7 @@
 
 
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -542,6 +543,8 @@ function MisspelledApp() {
   const [excludeCorrectFor, setExcludeCorrectFor] = useState(/* @__PURE__ */ new Set());
   const [excludeStrings, setExcludeStrings] = useState([]);
   const [excludeInput, setExcludeInput] = useState("");
+  const [includeStrings, setIncludeStrings] = useState([]);
+  const [includeInput, setIncludeInput] = useState("");
   const [copiedTerm, setCopiedTerm] = useState(null);
   const [combinedMode, setCombinedMode] = useState("or");
   const [ebayOpts, setEbayOpts] = useState({
@@ -691,6 +694,15 @@ function MisspelledApp() {
     setExcludeStrings([...excludeStrings, ...fresh]);
   };
   const clearExcludes = () => setExcludeStrings([]);
+  const addIncludeString = () => {
+    const t = includeInput.trim();
+    if (t && !includeStrings.includes(t)) {
+      setIncludeStrings([...includeStrings, t]);
+      setIncludeInput("");
+    }
+  };
+  const removeIncludeString = (t) => setIncludeStrings(includeStrings.filter((x) => x !== t));
+  const clearIncludes = () => setIncludeStrings([]);
   const MAX_QUERY_LEN = 250;
   const MAX_TOTAL_QUERIES = 25;
   const variantsForGroup = (groupIdx) => {
@@ -726,6 +738,18 @@ function MisspelledApp() {
     }
     return suffix;
   };
+  const buildIncludeSuffix = () => {
+    let suffix = "";
+    const seen = /* @__PURE__ */ new Set();
+    for (const inc of includeStrings) {
+      const e = (inc || "").trim();
+      if (!e || seen.has(e.toLowerCase())) continue;
+      seen.add(e.toLowerCase());
+      suffix += ` ${e.includes(" ") ? `"${e}"` : e}`;
+    }
+    return suffix;
+  };
+  const buildFixedSuffix = () => buildIncludeSuffix() + buildExcludeSuffix();
   const MAX_PAREN_OR_TERMS = 14;
   const chunkGroupVariants = (variants, budget) => {
     if (variants.length === 1) return [quoteVariant(variants[0])];
@@ -761,7 +785,7 @@ function MisspelledApp() {
       }
     }
     if (all.length === 0) return { queries: [], truncated: false };
-    const excludeSuffix = buildExcludeSuffix();
+    const excludeSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
     const budget = MAX_QUERY_LEN - excludeSuffix.length;
     const chunks = [];
@@ -795,7 +819,7 @@ function MisspelledApp() {
       if (variants.length > 0) active.push({ idx: i, variants });
     }
     if (active.length === 0) return { queries: [], truncated: false };
-    const excludeSuffix = buildExcludeSuffix();
+    const excludeSuffix = buildFixedSuffix();
     const fullQuery = active.map((g) => formatGroup(g.variants)).join(" ") + excludeSuffix;
     if (fullQuery.length <= MAX_QUERY_LEN) return { queries: [fullQuery], truncated: false };
     const interGroupSpaces = Math.max(0, active.length - 1);
@@ -846,7 +870,7 @@ function MisspelledApp() {
       truncated: naturalCartesian > MAX_TOTAL_QUERIES
     };
   };
-  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, effectiveMode]);
+  const splitResult = useMemo(buildSplitQueries, [tokenGroups, selected, excludeCorrectFor, excludeStrings, includeStrings, effectiveMode]);
   const combinedQueries = splitResult.queries;
   const combinedUrls = useMemo(
     () => combinedQueries.map((q) => buildEbayUrl(q, ebayOpts)),
@@ -1094,6 +1118,83 @@ function MisspelledApp() {
     letterSpacing: "0.1em",
     fontFamily: "inherit"
   } }, "ADD"))), /* @__PURE__ */ React.createElement("section", { style: {
+    background: "#fefdf8",
+    border: "2px solid #1c1917",
+    padding: "16px",
+    marginBottom: "20px"
+  } }, /* @__PURE__ */ React.createElement("div", { style: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+    marginBottom: "12px",
+    flexWrap: "wrap"
+  } }, /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: {
+    fontSize: "11px",
+    letterSpacing: "0.2em",
+    color: "#57534e",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px"
+  } }, /* @__PURE__ */ React.createElement(Sparkles, { size: 12 }), " REQUIRE IN EVERY SEARCH", /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "4px", color: "#a8a29e", fontWeight: "400", letterSpacing: "0.05em" } }, "(literal term, not misspelled, AND'd to every chunk)")), includeStrings.length > 0 && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: clearIncludes,
+      className: "typewriter",
+      style: {
+        padding: "4px 10px",
+        border: "1.5px solid #b45309",
+        background: "transparent",
+        color: "#b45309",
+        cursor: "pointer",
+        fontSize: "10px",
+        letterSpacing: "0.1em",
+        fontFamily: "'Special Elite', monospace"
+      }
+    },
+    "CLEAR"
+  )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: includeStrings.length ? "12px" : "0" } }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: includeInput,
+      onChange: (e) => setIncludeInput(e.target.value),
+      onKeyDown: (e) => e.key === "Enter" && addIncludeString(),
+      placeholder: "Term to require literally, e.g. 'gfx', 'rb67', '50mm'",
+      className: "mono",
+      style: { flex: 1, padding: "8px 12px", border: "2px solid #1c1917", background: "#fefdf8", fontSize: "14px" }
+    }
+  ), /* @__PURE__ */ React.createElement("button", { onClick: addIncludeString, className: "btn-shadow typewriter", style: {
+    padding: "8px 16px",
+    border: "2px solid #1c1917",
+    background: "#b45309",
+    color: "#fefdf8",
+    cursor: "pointer",
+    fontSize: "13px",
+    letterSpacing: "0.1em",
+    fontFamily: "inherit"
+  } }, "REQUIRE")), includeStrings.length > 0 ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } }, includeStrings.map((t) => /* @__PURE__ */ React.createElement("div", { key: t, className: "mono", style: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "4px 8px",
+    background: "#fef7e6",
+    border: "1.5px solid #b45309",
+    fontSize: "13px",
+    color: "#92400e"
+  } }, /* @__PURE__ */ React.createElement("span", { style: { color: "#b45309", fontWeight: "700" } }, "+"), /* @__PURE__ */ React.createElement("span", null, t), /* @__PURE__ */ React.createElement("button", { onClick: () => removeIncludeString(t), style: {
+    border: "none",
+    background: "none",
+    cursor: "pointer",
+    padding: 0,
+    display: "flex",
+    alignItems: "center",
+    color: "#b45309"
+  } }, /* @__PURE__ */ React.createElement(X, { size: 12 }))))) : /* @__PURE__ */ React.createElement("div", { className: "typewriter", style: {
+    fontSize: "10px",
+    letterSpacing: "0.1em",
+    color: "#a8a29e"
+  } }, "No required terms. Each chunk searches only the typo variants.")), /* @__PURE__ */ React.createElement("section", { style: {
     background: "#fefdf8",
     border: "2px solid #1c1917",
     padding: "16px",
@@ -1639,6 +1740,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
 
 
