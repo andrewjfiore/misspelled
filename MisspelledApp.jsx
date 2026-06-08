@@ -683,9 +683,16 @@ export default function MisspelledApp() {
   // anything after a leading '-' as an exclusion -- so a typo like 'mam-iya' would be
   // parsed as "include mam, EXCLUDE iya", silently filtering out matching listings.
   const quoteVariant = (v) => /[\s-]/.test(v) ? `"${v}"` : v;
+  // Always emit a paren-OR group, even for a single variant. A single bare token (or
+  // a single term in parens) triggers eBay's autocorrect/spell-rewrite engine, which
+  // silently swaps the typo for the canonical brand and returns the wrong listings.
+  // Duplicating the lone variant -> `(typo,typo)` forces paren-OR semantics (2+ terms)
+  // and disables autocorrect; the OR-with-itself is a no-op for matching.
   const formatGroup = (variants) => {
     const quoted = variants.map(quoteVariant);
-    return quoted.length === 1 ? quoted[0] : `(${quoted.join(',')})`;
+    if (quoted.length === 0) return '';
+    if (quoted.length === 1) return `(${quoted[0]},${quoted[0]})`;
+    return `(${quoted.join(',')})`;
   };
 
   // Correct tokens whose group is toggled "exclude correct" — these get auto-appended
@@ -736,7 +743,10 @@ export default function MisspelledApp() {
   // budget is the total budget INCLUDING the parens (if applicable).
   const MAX_PAREN_OR_TERMS = 8; // eBay paren-OR cap: 8 terms work, 9+ → null SRP. Verified 2026-06-08.
   const chunkGroupVariants = (variants, budget) => {
-    if (variants.length === 1) return [quoteVariant(variants[0])];
+    if (variants.length === 1) {
+      const q = quoteVariant(variants[0]);
+      return [`(${q},${q})`]; // duplicate-to-2 so eBay does not autocorrect a lone term
+    }
     const innerBudget = budget - 2; // subtract the two parens chars
     const chunks = [];
     let cur = [], curLen = 0;
@@ -775,7 +785,6 @@ export default function MisspelledApp() {
   // So every emitted chunk must have between 2 and MAX_OR_TERMS_PER_GROUP variants. If we
   // have exactly 1 variant total we duplicate it (`(typo,typo)`) to force paren-OR mode.
   const MAX_OR_TERMS_PER_GROUP = 8;
-  const MIN_OR_TERMS_PER_GROUP = 2;
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -785,35 +794,37 @@ export default function MisspelledApp() {
     }
     if (all.length === 0) return { queries: [], truncated: false };
 
-    const excludeSuffix = buildFixedSuffix();
+    const fixedSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
-    const budget = MAX_QUERY_LEN - excludeSuffix.length;
+    const budget = MAX_QUERY_LEN - fixedSuffix.length;
 
-    // Decide how many chunks we need, then distribute terms evenly so chunk sizes differ
-    // by at most one. Avoids the failure mode where naive packing leaves a 1-term tail
-    // that hits autocorrect.
+    // Distribute terms evenly across the minimum number of chunks so sizes differ by
+    // at most one. Avoids the failure mode where naive packing leaves a 1-term tail
+    // chunk that hits eBay's autocorrect.
     const minChunks = Math.ceil(quoted.length / MAX_OR_TERMS_PER_GROUP);
     const chunks = Array.from({ length: minChunks }, () => []);
     quoted.forEach((v, i) => chunks[i % minChunks].push(v));
 
-    // Edge case: only 1 unique variant. Force paren-OR by duplicating so eBay sees 2 terms
-    // and disables autocorrect. Same listing matches whether we OR a term with itself or not.
-    if (chunks.length === 1 && chunks[0].length === 1) {
-      chunks[0] = [chunks[0][0], chunks[0][0]];
-    }
+    // Force paren-OR semantics (2+ terms) on every chunk, including the single-variant
+    // case, by duplicating the lone term. eBay treats `(typo,typo)` the same as `typo`
+    // for matching but skips autocorrect because there are 2 terms in the OR group.
+    const padToTwo = (chunk) => chunk.length === 1 ? [chunk[0], chunk[0]] : chunk;
 
-    // Char-budget safety: if any chunk overflows MAX_QUERY_LEN, split it. Terms are short
-    // (typo brand-words usually 5-15 chars) so this almost never fires below the 8-term cap.
+    // Char-budget safety. Halve any oversized chunk until each piece fits the budget,
+    // never going below 2 terms (which would re-trigger autocorrect).
     const safeChunks = [];
-    for (const chunk of chunks) {
-      const groupStr = `(${chunk.join(',')})`;
-      if (groupStr.length <= budget) { safeChunks.push(chunk); continue; }
-      const mid = Math.ceil(chunk.length / 2);
-      safeChunks.push(chunk.slice(0, mid), chunk.slice(mid));
-    }
+    const splitToBudget = (chunk) => {
+      const padded = padToTwo(chunk);
+      const groupStr = `(${padded.join(',')})`;
+      if (groupStr.length <= budget || padded.length <= 2) { safeChunks.push(padded); return; }
+      const mid = Math.ceil(padded.length / 2);
+      splitToBudget(padded.slice(0, mid));
+      splitToBudget(padded.slice(mid));
+    };
+    chunks.forEach(splitToBudget);
 
     let truncated = false;
-    let final = safeChunks.map(c => `(${c.join(',')})` + excludeSuffix);
+    let final = safeChunks.map(c => `(${c.join(',')})` + fixedSuffix);
     if (final.length > MAX_TOTAL_QUERIES) {
       final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
@@ -835,12 +846,12 @@ export default function MisspelledApp() {
     }
     if (active.length === 0) return { queries: [], truncated: false };
 
-    const excludeSuffix = buildFixedSuffix();
-    const fullQuery = active.map(g => formatGroup(g.variants)).join(' ') + excludeSuffix;
+    const fixedSuffix = buildFixedSuffix();
+    const fullQuery = active.map(g => formatGroup(g.variants)).join(' ') + fixedSuffix;
     if (fullQuery.length <= MAX_QUERY_LEN) return { queries: [fullQuery], truncated: false };
 
     const interGroupSpaces = Math.max(0, active.length - 1);
-    const totalBudget = MAX_QUERY_LEN - excludeSuffix.length - interGroupSpaces;
+    const totalBudget = MAX_QUERY_LEN - fixedSuffix.length - interGroupSpaces;
 
     const minBudgets = active.map(g => Math.max(...g.variants.map(v => quoteVariant(v).length)) + 2);
     const totalMin = minBudgets.reduce((a, b) => a + b, 0);
@@ -860,7 +871,7 @@ export default function MisspelledApp() {
         combos = next;
       }
       return {
-        queries: combos.map(c => c.join(' ') + excludeSuffix),
+        queries: combos.map(c => c.join(' ') + fixedSuffix),
         truncated: natural > MAX_TOTAL_QUERIES,
       };
     }
@@ -891,7 +902,7 @@ export default function MisspelledApp() {
     }
 
     return {
-      queries: combos.map(c => c.join(' ') + excludeSuffix),
+      queries: combos.map(c => c.join(' ') + fixedSuffix),
       truncated: naturalCartesian > MAX_TOTAL_QUERIES,
     };
   };

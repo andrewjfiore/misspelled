@@ -47,6 +47,7 @@
 
 
 
+
 const KEYBOARD_LAYOUTS = {
   qwerty: {
     name: "QWERTY (US)",
@@ -752,7 +753,9 @@ function MisspelledApp() {
   const quoteVariant = (v) => /[\s-]/.test(v) ? `"${v}"` : v;
   const formatGroup = (variants) => {
     const quoted = variants.map(quoteVariant);
-    return quoted.length === 1 ? quoted[0] : `(${quoted.join(",")})`;
+    if (quoted.length === 0) return "";
+    if (quoted.length === 1) return `(${quoted[0]},${quoted[0]})`;
+    return `(${quoted.join(",")})`;
   };
   const autoExcludedCorrect = () => {
     const out = [];
@@ -786,7 +789,10 @@ function MisspelledApp() {
   const buildFixedSuffix = () => buildIncludeSuffix() + buildExcludeSuffix();
   const MAX_PAREN_OR_TERMS = 8;
   const chunkGroupVariants = (variants, budget) => {
-    if (variants.length === 1) return [quoteVariant(variants[0])];
+    if (variants.length === 1) {
+      const q = quoteVariant(variants[0]);
+      return [`(${q},${q})`];
+    }
     const innerBudget = budget - 2;
     const chunks = [];
     let cur = [], curLen = 0;
@@ -811,7 +817,6 @@ function MisspelledApp() {
     return effectiveMode === "or" ? buildSplitQueriesOr() : buildSplitQueriesAnd();
   };
   const MAX_OR_TERMS_PER_GROUP = 8;
-  const MIN_OR_TERMS_PER_GROUP = 2;
   const buildSplitQueriesOr = () => {
     const all = [];
     for (let i = 0; i < tokenGroups.length; i++) {
@@ -820,27 +825,28 @@ function MisspelledApp() {
       }
     }
     if (all.length === 0) return { queries: [], truncated: false };
-    const excludeSuffix = buildFixedSuffix();
+    const fixedSuffix = buildFixedSuffix();
     const quoted = all.map(quoteVariant);
-    const budget = MAX_QUERY_LEN - excludeSuffix.length;
+    const budget = MAX_QUERY_LEN - fixedSuffix.length;
     const minChunks = Math.ceil(quoted.length / MAX_OR_TERMS_PER_GROUP);
     const chunks = Array.from({ length: minChunks }, () => []);
     quoted.forEach((v, i) => chunks[i % minChunks].push(v));
-    if (chunks.length === 1 && chunks[0].length === 1) {
-      chunks[0] = [chunks[0][0], chunks[0][0]];
-    }
+    const padToTwo = (chunk) => chunk.length === 1 ? [chunk[0], chunk[0]] : chunk;
     const safeChunks = [];
-    for (const chunk of chunks) {
-      const groupStr = `(${chunk.join(",")})`;
-      if (groupStr.length <= budget) {
-        safeChunks.push(chunk);
-        continue;
+    const splitToBudget = (chunk) => {
+      const padded = padToTwo(chunk);
+      const groupStr = `(${padded.join(",")})`;
+      if (groupStr.length <= budget || padded.length <= 2) {
+        safeChunks.push(padded);
+        return;
       }
-      const mid = Math.ceil(chunk.length / 2);
-      safeChunks.push(chunk.slice(0, mid), chunk.slice(mid));
-    }
+      const mid = Math.ceil(padded.length / 2);
+      splitToBudget(padded.slice(0, mid));
+      splitToBudget(padded.slice(mid));
+    };
+    chunks.forEach(splitToBudget);
     let truncated = false;
-    let final = safeChunks.map((c) => `(${c.join(",")})` + excludeSuffix);
+    let final = safeChunks.map((c) => `(${c.join(",")})` + fixedSuffix);
     if (final.length > MAX_TOTAL_QUERIES) {
       final = final.slice(0, MAX_TOTAL_QUERIES);
       truncated = true;
@@ -854,11 +860,11 @@ function MisspelledApp() {
       if (variants.length > 0) active.push({ idx: i, variants });
     }
     if (active.length === 0) return { queries: [], truncated: false };
-    const excludeSuffix = buildFixedSuffix();
-    const fullQuery = active.map((g) => formatGroup(g.variants)).join(" ") + excludeSuffix;
+    const fixedSuffix = buildFixedSuffix();
+    const fullQuery = active.map((g) => formatGroup(g.variants)).join(" ") + fixedSuffix;
     if (fullQuery.length <= MAX_QUERY_LEN) return { queries: [fullQuery], truncated: false };
     const interGroupSpaces = Math.max(0, active.length - 1);
-    const totalBudget = MAX_QUERY_LEN - excludeSuffix.length - interGroupSpaces;
+    const totalBudget = MAX_QUERY_LEN - fixedSuffix.length - interGroupSpaces;
     const minBudgets = active.map((g) => Math.max(...g.variants.map((v) => quoteVariant(v).length)) + 2);
     const totalMin = minBudgets.reduce((a, b) => a + b, 0);
     if (totalMin > totalBudget) {
@@ -875,7 +881,7 @@ function MisspelledApp() {
         combos2 = next;
       }
       return {
-        queries: combos2.map((c) => c.join(" ") + excludeSuffix),
+        queries: combos2.map((c) => c.join(" ") + fixedSuffix),
         truncated: natural > MAX_TOTAL_QUERIES
       };
     }
@@ -901,7 +907,7 @@ function MisspelledApp() {
       combos = next;
     }
     return {
-      queries: combos.map((c) => c.join(" ") + excludeSuffix),
+      queries: combos.map((c) => c.join(" ") + fixedSuffix),
       truncated: naturalCartesian > MAX_TOTAL_QUERIES
     };
   };
@@ -1775,6 +1781,7 @@ function miniBtnLight() {
     gap: "4px"
   };
 }
+
 
 
 
