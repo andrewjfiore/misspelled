@@ -1,5 +1,7 @@
 # MISSPELLED
 
+> **LLM coding experiment.** This project was built mostly by AI coding agents as an experiment. It is not maintained, reviewed, or tested for real use. Do not rely on it for anything that matters.
+
 Find eBay bargains by searching for listings with typos in the title. Sellers who misspell their listings get fewer views, which means lower prices for you.
 
 MISSPELLED generates hundreds of common misspellings for any search term, then builds eBay search URLs that find those overlooked listings.
